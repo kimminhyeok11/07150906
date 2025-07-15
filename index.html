@@ -1,1 +1,415 @@
-dkdkdkdk
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실시간 3인 마피아 게임</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.75);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+        .hidden { display: none; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center h-screen p-4">
+
+    <div id="game-container" class="w-full max-w-md h-[90vh] flex flex-col bg-gray-800 rounded-2xl shadow-2xl border border-gray-700">
+
+        <!-- 게임 헤더 -->
+        <header class="bg-gray-900 p-4 rounded-t-2xl flex justify-between items-center border-b border-gray-700">
+            <div>
+                <h1 class="text-xl font-bold text-indigo-400">3인 마피아 게임</h1>
+                <p class="text-xs text-gray-400">내 ID: <span id="user-id-display" class="font-mono">인증 중...</span></p>
+            </div>
+            <div id="timer-display" class="text-2xl font-bold text-red-500"></div>
+        </header>
+
+        <!-- 대기 화면 -->
+        <div id="waiting-view" class="flex-1 flex flex-col items-center justify-center p-6">
+            <h2 class="text-2xl font-bold mb-4">플레이어 대기 중...</h2>
+            <p id="player-count" class="text-4xl font-mono mb-6">1 / 3</p>
+            <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-indigo-500"></div>
+        </div>
+
+        <!-- 게임 진행 화면 -->
+        <div id="game-view" class="hidden flex-1 flex flex-col h-full">
+            <div id="role-display" class="p-3 bg-indigo-900 text-center font-bold text-lg"></div>
+            <div id="chat-messages" class="flex-1 p-4 overflow-y-auto space-y-3">
+                <!-- 채팅 메시지 -->
+            </div>
+            <div id="chat-input-area" class="p-4 border-t border-gray-700">
+                <div class="flex space-x-2">
+                    <input type="text" id="message-input" placeholder="메시지 입력..." class="flex-1 p-3 bg-gray-700 border border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    <button id="send-button" class="bg-indigo-600 font-semibold px-5 py-3 rounded-lg hover:bg-indigo-700 transition">전송</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- 투표 모달 -->
+    <div id="voting-view" class="hidden modal-overlay">
+        <div class="bg-gray-800 rounded-xl shadow-2xl p-8 border border-gray-700 text-center">
+            <h2 class="text-2xl font-bold mb-6">마피아를 지목하세요!</h2>
+            <div id="vote-options" class="space-y-3">
+                <!-- 투표 버튼 -->
+            </div>
+            <p id="vote-status" class="mt-4 text-sm text-yellow-400 hidden"></p>
+        </div>
+    </div>
+
+    <!-- 결과 모달 -->
+    <div id="game-over-view" class="hidden modal-overlay">
+        <div class="bg-gray-800 rounded-xl shadow-2xl p-8 border border-gray-700 text-center max-w-sm">
+            <h2 class="text-3xl font-bold mb-4" id="game-result-title"></h2>
+            <p class="mb-2">지목된 플레이어: <span id="eliminated-player-id" class="font-mono"></span></p>
+            <p class="mb-6">그의 역할은... <span id="eliminated-player-role" class="font-bold text-2xl"></span></p>
+            <button id="play-again-button" class="w-full bg-green-600 font-bold py-3 rounded-lg hover:bg-green-700 transition text-lg">다시하기</button>
+        </div>
+    </div>
+
+    <script type="module">
+        // --- Firebase 모듈 임포트 ---
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc, runTransaction, serverTimestamp, collection, addDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Firebase 설정 ---
+        // 중요: 아래 firebaseConfig를 본인의 Firebase 프로젝트 설정으로 교체하세요.
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_AUTH_DOMAIN",
+            projectId: "YOUR_PROJECT_ID",
+            // ... etc
+        };
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-mafia-game';
+
+        // --- 앱 초기화 ---
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // --- 전역 변수 및 UI 요소 ---
+        let currentUserId = null;
+        let gameDocRef;
+        let chatCollectionRef;
+        let countdownInterval;
+
+        const waitingView = document.getElementById('waiting-view');
+        const gameView = document.getElementById('game-view');
+        const votingView = document.getElementById('voting-view');
+        const gameOverView = document.getElementById('game-over-view');
+        // ... (다른 UI 요소들도 여기에)
+
+        // --- 게임 로직 ---
+
+        // 1. 인증 및 게임 시작
+        onAuthStateChanged(auth, user => {
+            if (user) {
+                currentUserId = user.uid;
+                document.getElementById('user-id-display').textContent = currentUserId;
+                
+                // Firestore 문서 참조 설정
+                const gameDocPath = `/artifacts/${appId}/public/data/mafia_game/gameState`;
+                gameDocRef = doc(db, gameDocPath);
+                
+                const chatCollectionPath = `/artifacts/${appId}/public/data/mafia_game/chatMessages`;
+                chatCollectionRef = collection(db, chatCollectionPath);
+
+                // 게임 상태 리스너 부착
+                onSnapshot(gameDocRef, handleGameStateChange);
+            }
+        });
+
+        async function authenticate() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Authentication failed:", error);
+            }
+        }
+
+        // 2. 게임 상태 변경 핸들러 (핵심 로직)
+        async function handleGameStateChange(docSnap) {
+            if (!docSnap.exists() || docSnap.data().gameState === 'finished') {
+                // 게임이 없거나 끝났으면, 플레이어로 참여 시도
+                await joinGame();
+                return;
+            }
+
+            const gameData = docSnap.data();
+            updateUI(gameData); // 현재 상태에 맞게 UI 업데이트
+
+            // 상태에 따른 로직 처리
+            switch (gameData.gameState) {
+                case 'waiting':
+                    if (gameData.players.length === 3) {
+                        await startGame(gameData.players);
+                    }
+                    break;
+                case 'discussion':
+                    startTimer(gameData.discussionEndTime);
+                    listenToChat();
+                    break;
+                case 'voting':
+                    clearInterval(countdownInterval);
+                    checkAllVoted(gameData);
+                    break;
+            }
+        }
+
+        // 3. UI 업데이트 함수
+        function updateUI(gameData) {
+            // 뷰 전환
+            ['waiting-view', 'game-view', 'voting-view', 'game-over-view'].forEach(id => document.getElementById(id).classList.add('hidden'));
+            
+            const myPlayer = gameData.players?.find(p => p.uid === currentUserId);
+
+            switch (gameData.gameState) {
+                case 'waiting':
+                    document.getElementById('waiting-view').classList.remove('hidden');
+                    document.getElementById('player-count').textContent = `${gameData.players.length} / 3`;
+                    break;
+                case 'discussion':
+                    document.getElementById('game-view').classList.remove('hidden');
+                    if (myPlayer) {
+                        const roleDisplay = document.getElementById('role-display');
+                        roleDisplay.textContent = `당신의 역할: ${myPlayer.role === 'mafia' ? '마피아' : '시민'}`;
+                        roleDisplay.className = `p-3 text-center font-bold text-lg ${myPlayer.role === 'mafia' ? 'bg-red-900' : 'bg-blue-900'}`;
+                    }
+                    break;
+                case 'voting':
+                    document.getElementById('game-view').classList.remove('hidden'); // 게임 뷰는 계속 보여줌
+                    document.getElementById('voting-view').classList.remove('hidden');
+                    renderVoteOptions(gameData.players);
+                    break;
+                case 'finished':
+                    document.getElementById('game-over-view').classList.remove('hidden');
+                    renderGameResult(gameData);
+                    break;
+            }
+        }
+
+        // 4. 게임 참여 및 시작
+        async function joinGame() {
+            try {
+                await runTransaction(db, async (transaction) => {
+                    const gameDoc = await transaction.get(gameDocRef);
+                    if (!gameDoc.exists() || gameDoc.data().gameState === 'finished') {
+                        // 새 게임 시작
+                        transaction.set(gameDocRef, {
+                            gameState: 'waiting',
+                            players: [{ uid: currentUserId, isAlive: true }],
+                        });
+                    } else {
+                        // 기존 게임에 참여
+                        const players = gameDoc.data().players;
+                        if (players.length < 3 && !players.some(p => p.uid === currentUserId)) {
+                            const newPlayers = [...players, { uid: currentUserId, isAlive: true }];
+                            transaction.update(gameDocRef, { players: newPlayers });
+                        }
+                    }
+                });
+            } catch (e) {
+                console.error("게임 참여 트랜잭션 실패: ", e);
+            }
+        }
+
+        async function startGame(players) {
+            // 역할 배정
+            const shuffledPlayers = [...players].sort(() => 0.5 - Math.random());
+            const mafia = shuffledPlayers[0].uid;
+            const updatedPlayers = players.map(p => ({
+                ...p,
+                role: p.uid === mafia ? 'mafia' : 'citizen',
+                votedFor: null
+            }));
+
+            // 토론 종료 시간 설정 (2분 후)
+            const discussionEndTime = new Date(Date.now() + 2 * 60 * 1000);
+
+            await setDoc(gameDocRef, {
+                gameState: 'discussion',
+                players: updatedPlayers,
+                discussionEndTime: discussionEndTime
+            }, { merge: true });
+        }
+        
+        // 5. 토론 및 채팅
+        function startTimer(endTime) {
+            clearInterval(countdownInterval);
+            const timerDisplay = document.getElementById('timer-display');
+
+            countdownInterval = setInterval(async () => {
+                const now = new Date();
+                const remaining = endTime.toMillis() - now.getTime();
+
+                if (remaining <= 0) {
+                    clearInterval(countdownInterval);
+                    timerDisplay.textContent = '00:00';
+                    // 한 클라이언트만 상태를 변경하도록 함 (첫 번째 플레이어)
+                    const gameSnap = await getDoc(gameDocRef);
+                    if(gameSnap.data().players[0].uid === currentUserId) {
+                        await setDoc(gameDocRef, { gameState: 'voting' }, { merge: true });
+                    }
+                } else {
+                    const minutes = Math.floor((remaining / 1000 / 60) % 60).toString().padStart(2, '0');
+                    const seconds = Math.floor((remaining / 1000) % 60).toString().padStart(2, '0');
+                    timerDisplay.textContent = `${minutes}:${seconds}`;
+                }
+            }, 1000);
+        }
+
+        function listenToChat() {
+            onSnapshot(chatCollectionRef, (snapshot) => {
+                const messages = [];
+                snapshot.forEach(doc => messages.push(doc.data()));
+                messages.sort((a,b) => a.createdAt - b.createdAt);
+                
+                const chatMessages = document.getElementById('chat-messages');
+                chatMessages.innerHTML = '';
+                messages.forEach(msg => {
+                    const p = document.createElement('p');
+                    p.innerHTML = `<span class="font-bold ${msg.uid === currentUserId ? 'text-green-400' : 'text-yellow-400'}">${msg.uid === currentUserId ? '나' : `익명${msg.uid.substring(0,4)}`}:</span> ${msg.text}`;
+                    chatMessages.appendChild(p);
+                });
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            });
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('message-input');
+            const text = input.value.trim();
+            if (text) {
+                await addDoc(chatCollectionRef, {
+                    uid: currentUserId,
+                    text: text,
+                    createdAt: new Date()
+                });
+                input.value = '';
+            }
+        }
+        
+        // 6. 투표
+        function renderVoteOptions(players) {
+            const voteOptions = document.getElementById('vote-options');
+            voteOptions.innerHTML = '';
+            players.forEach(player => {
+                if (player.uid !== currentUserId) {
+                    const button = document.createElement('button');
+                    button.textContent = `익명${player.uid.substring(0,4)} 지목하기`;
+                    button.className = 'w-full bg-red-600 font-semibold py-3 rounded-lg hover:bg-red-700 transition';
+                    button.onclick = () => castVote(player.uid);
+                    voteOptions.appendChild(button);
+                }
+            });
+        }
+
+        async function castVote(votedForUid) {
+            document.getElementById('vote-options').classList.add('hidden');
+            document.getElementById('vote-status').classList.remove('hidden');
+            document.getElementById('vote-status').textContent = '다른 플레이어들의 투표를 기다립니다...';
+
+            await runTransaction(db, async (transaction) => {
+                const gameDoc = await transaction.get(gameDocRef);
+                const players = gameDoc.data().players;
+                const newPlayers = players.map(p => p.uid === currentUserId ? { ...p, votedFor: votedForUid } : p);
+                transaction.update(gameDocRef, { players: newPlayers });
+            });
+        }
+        
+        async function checkAllVoted(gameData) {
+            const allVoted = gameData.players.every(p => p.votedFor !== null);
+            if (allVoted) {
+                // 투표 집계 (한 클라이언트만 처리)
+                if (gameData.players[0].uid === currentUserId) {
+                    tallyVotes(gameData);
+                }
+            }
+        }
+
+        async function tallyVotes(gameData) {
+            const votes = {};
+            gameData.players.forEach(p => {
+                if(p.votedFor) {
+                    votes[p.votedFor] = (votes[p.votedFor] || 0) + 1;
+                }
+            });
+
+            let eliminatedPlayerId = null;
+            let maxVotes = 0;
+            for (const uid in votes) {
+                if (votes[uid] > maxVotes) {
+                    maxVotes = votes[uid];
+                    eliminatedPlayerId = uid;
+                }
+            }
+            // 동점자 처리: 이 경우엔 무작위로 한 명을 선택하거나, 무효 처리할 수 있습니다. 여기서는 ID가 빠른 사람을 선택합니다.
+            if (!eliminatedPlayerId && gameData.players.length > 0) {
+                 const candidates = gameData.players.filter(p => p.uid !== gameData.players[0].uid);
+                 if(candidates.length > 0) eliminatedPlayerId = candidates[0].uid;
+                 else eliminatedPlayerId = gameData.players[1].uid; // fallback
+            }
+
+
+            const eliminatedPlayer = gameData.players.find(p => p.uid === eliminatedPlayerId);
+            const winner = eliminatedPlayer.role === 'mafia' ? 'citizens' : 'mafia';
+
+            await setDoc(gameDocRef, { 
+                gameState: 'finished',
+                winner: winner,
+                eliminatedPlayer: eliminatedPlayer
+            }, { merge: true });
+        }
+        
+        // 7. 결과 및 재시작
+        function renderGameResult(gameData) {
+            const { winner, eliminatedPlayer } = gameData;
+            document.getElementById('game-result-title').textContent = winner === 'citizens' ? '시민 승리!' : '마피아 승리!';
+            document.getElementById('eliminated-player-id').textContent = `익명${eliminatedPlayer.uid.substring(0,4)}`;
+            document.getElementById('eliminated-player-role').textContent = eliminatedPlayer.role === 'mafia' ? '마피아' : '시민';
+            
+            if (eliminatedPlayer.role === 'mafia') {
+                document.getElementById('eliminated-player-role').className = 'font-bold text-2xl text-red-500';
+            } else {
+                document.getElementById('eliminated-player-role').className = 'font-bold text-2xl text-blue-500';
+            }
+        }
+
+        async function resetGame() {
+            // 게임 문서와 채팅 내용을 초기화합니다.
+            await setDoc(gameDocRef, {
+                gameState: 'waiting',
+                players: [{ uid: currentUserId, isAlive: true }]
+            });
+            // 채팅 기록은 이 예제에서는 삭제하지 않지만, 필요시 삭제 로직 추가 가능
+        }
+
+        // --- 이벤트 리스너 ---
+        document.getElementById('send-button').addEventListener('click', sendMessage);
+        document.getElementById('message-input').addEventListener('keypress', (e) => e.key === 'Enter' && sendMessage());
+        document.getElementById('play-again-button').addEventListener('click', resetGame);
+
+        // --- 앱 시작 ---
+        authenticate();
+
+    </script>
+</body>
+</html>
+
