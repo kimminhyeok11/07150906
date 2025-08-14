@@ -88,7 +88,7 @@
         @keyframes get-hit-animation { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
         .get-hit-animation { animation: get-hit-animation 0.4s; }
         .hp-bar-inner { transition: width 0.5s ease-in-out; }
-        #battle-log { height: 200px; backdrop-filter: blur(5px); }
+        #battle-log { height: 150px; backdrop-filter: blur(5px); }
         .log-damage { color: #ffdddd; } .log-crit { color: #fffa65; font-weight: bold; }
         .log-super-effective { color: #a3ffb4; font-weight: bold; }
         .log-not-effective { color: #d1d1d1; } .log-no-effect { color: #999999; }
@@ -943,7 +943,7 @@ JSON 스키마에 맞춰 답변해주세요.
             battleArenaContainer.style.background = `url('${randomBg}') center/cover`;
 
             battleArenaContainer.innerHTML = `
-                <div class="flex flex-col justify-between min-h-screen p-4 pb-52 text-white">
+                <div class="flex flex-col justify-around min-h-screen p-4 pb-40 text-white">
                     <!-- Opponent -->
                     <div class="flex justify-end items-center gap-4">
                         <div class="bg-gray-800/70 p-3 rounded-lg w-64 text-right">
