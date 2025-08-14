@@ -3,214 +3,1341 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>FaceMesh Particle Sync Test</title>
+    <title>하이포켓몬 (HIPOKETMON)</title>
+    <!-- Tailwind CSS, Tone.js (for sound), Supabase Client -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- TensorFlow.js and FaceMesh -->
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@3.11.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@3.11.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@3.11.0"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619/face_mesh.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/face-landmarks-detection@1.0.2/dist/face-landmarks-detection.js" crossorigin="anonymous"></script>
-
-    <!-- Three.js -->
-    <script async src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"></script>
-    <script type="importmap">
-    {
-        "imports": {
-            "three": "https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.module.js",
-            "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.157.0/examples/jsm/"
-        }
-    }
-    </script>
-    <link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=VT323&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: 'VT323', monospace;
-            background-color: #000;
-            color: #00f7ff;
-            margin: 0;
-            overflow: hidden;
-        }
-        #main-container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
-        #info-panel {
-            position: absolute;
-            top: 1rem;
-            left: 1rem;
-            background: rgba(0,0,0,0.5);
-            padding: 1rem;
-            border: 1px solid #00f7ff;
-            max-width: 300px;
-            z-index: 10;
-        }
-        h1 {
-            font-family: 'Major Mono Display', monospace;
-            color: #00f7ff;
-            text-shadow: 0 0 10px #00f7ff;
-        }
-        button {
-            font-family: 'Major Mono Display', monospace;
-            background: transparent;
-            border: 2px solid #00f7ff;
-            color: #00f7ff;
-            padding: 0.5rem 1rem;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-        button:hover:not(:disabled) {
-            background: #00f7ff;
-            color: #000;
-        }
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+        /* Base Styles */
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #f0f2f5; }
+        .view { display: none; }
+        .view.active { display: block; animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .font-title { font-family: 'Black Han Sans', sans-serif; }
+
+        /* Card Styles */
+        .pokedex-card { background: #fff; border-left-width: 8px; transition: all 0.3s ease-in-out; cursor: pointer; position: relative; overflow: hidden; }
+        .pokedex-card:hover { transform: translateY(-5px) scale(1.02); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
+        .stat-bar-bg { background-color: #e9ecef; border-radius: 999px; }
+        .stat-bar { transition: width 0.8s ease-out; border-radius: 999px; }
+        .rank-display { position: absolute; bottom: 8px; right: 8px; background-color: rgba(0,0,0,0.6); color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: bold; }
+
+        /* Type & Universe Badges */
+        .type-badge { padding: 4px 12px; border-radius: 12px; font-weight: 700; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.3); }
+        .type-Normal { background-color: #A8A77A; } .type-Fire { background-color: #EE8130; }
+        .type-Water { background-color: #6390F0; } .type-Electric { background-color: #F7D02C; }
+        .type-Grass { background-color: #7AC74C; } .type-Ice { background-color: #96D9D6; }
+        .type-Fighting { background-color: #C22E28; } .type-Poison { background-color: #A33EA1; }
+        .type-Ground { background-color: #E2BF65; } .type-Flying { background-color: #A98FF3; }
+        .type-Psychic { background-color: #F95587; } .type-Bug { background-color: #A6B91A; }
+        .type-Rock { background-color: #B6A136; } .type-Ghost { background-color: #735797; }
+        .type-Dragon { background-color: #6F35FC; } .type-Darkness { background-color: #705746; }
+        .type-Steel { background-color: #B7B7CE; } .type-Fairy { background-color: #D685AD; }
+        .type-Light { background: linear-gradient(45deg, #FFFDE4, #F9E79F); color: #B48A00; text-shadow: 0 0 2px white; }
+
+        .universe-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 8px; font-weight: bold; }
+        .universe-pokemon { background-color: #ffcb05; color: #2e5da8; }
+        .universe-haunted_house { background-color: #4b0082; color: #e0e0e0; }
+
+        /* Rarity Styles */
+        .rarity-badge { padding: 4px 12px; border-radius: 12px; font-weight: 900; color: white; }
+        .rarity-일반 { background-color: #B0BEC5; } .rarity-희귀 { background-color: #42A5F5; }
+        .rarity-에픽 { background-color: #AB47BC; } .rarity-전설 { background: linear-gradient(45deg, #FFEE58, #F57F17); text-shadow: 0 0 2px black; }
+        .rarity-고대 { background: linear-gradient(45deg, #4DB6AC, #004D40); text-shadow: 0 0 2px black; }
+        .rarity-신화 { background: linear-gradient(45deg, #FF7043, #D84315, #BF360C); text-shadow: 0 0 2px black; }
+        
+        .card-border-일반 { border-color: #B0BEC5; } .card-border-희귀 { border-color: #42A5F5; }
+        .card-border-에픽 { border-color: #AB47BC; } .card-border-전설 { border-color: #F57F17; }
+        .card-border-고대 { border-color: #004D40; } .card-border-신화 { border-color: #BF360C; }
+
+        /* Special Rarity Card Effects */
+        @keyframes glow-legendary { 0% { box-shadow: 0 0 5px #F57F17, 0 0 10px #F57F17, 0 0 15px #FFEE58; } 50% { box-shadow: 0 0 10px #FFEE58, 0 0 20px #FFEE58, 0 0 30px #F57F17; } 100% { box-shadow: 0 0 5px #F57F17, 0 0 10px #F57F17, 0 0 15px #FFEE58; } }
+        .card-rarity-전설 { animation: glow-legendary 5s ease-in-out infinite; }
+        @keyframes glow-ancient { 0% { box-shadow: 0 0 5px #4DB6AC, 0 0 10px #4DB6AC, 0 0 15px #004D40; } 50% { box-shadow: 0 0 10px #80CBC4, 0 0 20px #80CBC4, 0 0 30px #4DB6AC; } 100% { box-shadow: 0 0 5px #4DB6AC, 0 0 10px #4DB6AC, 0 0 15px #004D40; } }
+        .card-rarity-고대 { animation: glow-ancient 4s ease-in-out infinite; }
+        @keyframes glow-mythical { 0% { box-shadow: 0 0 5px #FF7043, 0 0 10px #FF7043, 0 0 15px #BF360C; } 50% { box-shadow: 0 0 10px #FFCC80, 0 0 20px #FFCC80, 0 0 30px #FF7043; } 100% { box-shadow: 0 0 5px #FF7043, 0 0 10px #FF7043, 0 0 15px #BF360C; } }
+        .card-rarity-신화 { animation: glow-mythical 3s ease-in-out infinite; }
+        
+        .rank-1 { box-shadow: 0 0 15px gold, 0 0 5px gold inset; border-color: gold; }
+        .rank-2 { box-shadow: 0 0 15px silver, 0 0 5px silver inset; border-color: silver; }
+        .rank-3 { box-shadow: 0 0 15px #CD7F32, 0 0 5px #CD7F32 inset; border-color: #CD7F32; }
+
+        /* Status & Rarity Icons */
+        .icon-container { position: absolute; top: 10px; right: 10px; display: flex; gap: 4px; z-index: 3; }
+        .status-icon, .rarity-star-icon { width: 24px; height: 24px; }
+        @keyframes pulse { 0% { transform: scale(1); opacity: 0.7; } 50% { transform: scale(1.2); opacity: 1; } 100% { transform: scale(1); opacity: 0.7; } }
+        .status-icon svg { animation: pulse 2s infinite; filter: drop-shadow(0 0 3px rgba(171, 71, 188, 0.8)); }
+        .rarity-star-icon svg { filter: drop-shadow(0 0 3px rgba(255, 215, 0, 0.8)); }
+
+        /* Battle Arena Styles */
+        #battle-arena-view { position: relative; overflow: hidden; min-height: 100vh; }
+        .battle-character-container { position: relative; }
+        .battle-character-img { transition: all 0.3s ease-in-out; filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.5)); }
+        .status-poison { filter: drop-shadow(0 0 15px #AB47BC) hue-rotate(270deg) brightness(0.8); }
+        .status-paralysis { animation: shake 0.5s infinite; }
+        .status-sleep { filter: brightness(0.5) grayscale(0.5); }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+        @keyframes attack-animation { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15) rotate(-5deg); } }
+        .attack-animation { animation: attack-animation 0.3s; }
+        @keyframes get-hit-animation { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
+        .get-hit-animation { animation: get-hit-animation 0.4s; }
+        .hp-bar-inner { transition: width 0.5s ease-in-out; }
+        #battle-log { height: 150px; backdrop-filter: blur(5px); }
+        .log-damage { color: #ffdddd; } .log-crit { color: #fffa65; font-weight: bold; }
+        .log-super-effective { color: #a3ffb4; font-weight: bold; }
+        .log-not-effective { color: #d1d1d1; } .log-no-effect { color: #999999; }
+        .log-turn { color: #82ccdd; } .log-win { color: #f7b731; font-size: 1.25rem; font-weight: bold; text-shadow: 0 0 5px black; }
+        .log-rank { color: #eab308; font-style: italic; }
+        .log-status-poison { color: #ce93d8; font-style: italic; }
+        .log-status-paralysis { color: #fff176; font-style: italic; }
+        .log-status-sleep { color: #90a4ae; font-style: italic; }
+        .log-desperate { color: #ff8a80; font-weight: bold; text-shadow: 0 0 5px black; }
+        .damage-indicator { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 2.5rem; font-weight: 900; color: #ef4444; text-shadow: 2px 2px 3px black; animation: floatUp 1.2s ease-out forwards; pointer-events: none; }
+        @keyframes floatUp { from { transform: translate(-50%, -50%) scale(1); opacity: 1; } to { transform: translate(-50%, -200%) scale(1.8); opacity: 0; } }
+        .battle-status-badge { position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%); padding: 2px 8px; border-radius: 8px; font-size: 0.75rem; font-weight: bold; color: white; text-shadow: 1px 1px 1px black; }
+        #battle-effects-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5000; }
+        .impact-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: 'Black Han Sans', sans-serif; font-size: 5rem; text-shadow: 3px 3px 5px rgba(0,0,0,0.5); animation: impact-pop 1s ease-out forwards; }
+        .impact-text.crit { color: #fffa65; }
+        .impact-text.super-effective { color: #a3ffb4; }
+        @keyframes impact-pop { 0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; } 20% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; } 80% { transform: translate(-50%, -50%) scale(1); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 0; } }
+        @keyframes screen-shake { 0%, 100% { transform: translateX(0); } 10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); } 20%, 40%, 60%, 80% { transform: translateX(5px); } }
+        .screen-shake { animation: screen-shake 0.3s; }
+
+        /* General UI Components */
+        .loader { border: 8px solid #f3f3f3; border-radius: 50%; border-top: 8px solid #3498db; width: 60px; height: 60px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .filter-btn { padding: 8px 16px; border-radius: 8px; font-weight: bold; transition: all 0.2s; }
+        .filter-btn.active { background-color: #3b82f6; color: white; }
+        .filter-btn:not(.active) { background-color: #e5e7eb; color: #4b5563; }
+
+        /* Modal Styles */
+        .modal-overlay { position: fixed; inset: 0; background-color: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; z-index: 1000; animation: fadeIn 0.3s; }
+        .modal-content { background: white; padding: 1.5rem; border-radius: 1rem; max-width: 90vw; max-height: 90vh; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.2); }
+        .type-chart-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 0.5rem; }
+        .type-chart-cell { text-align: center; padding: 0.5rem; border-radius: 0.5rem; }
+
+        /* Ranking Podium */
+        .podium { display: flex; justify-content: center; align-items: flex-end; gap: 1rem; min-height: 250px; }
+        .podium-item { display: flex; flex-direction: column; align-items: center; text-align: center; }
+        .podium-2 { order: 1; }
+        .podium-1 { order: 2; }
+        .podium-3 { order: 3; }
+        .podium-img { border-radius: 50%; object-fit: cover; border: 4px solid; cursor: pointer; }
+        .podium-1 .podium-img { width: 120px; height: 120px; border-color: #FFD700; }
+        .podium-2 .podium-img { width: 100px; height: 100px; border-color: #C0C0C0; }
+        .podium-3 .podium-img { width: 80px; height: 80px; border-color: #CD7F32; }
+        .podium-base { color: white; font-weight: bold; padding: 0.5rem 1rem; border-radius: 0.5rem 0.5rem 0 0; }
+        .podium-1 .podium-base { background-color: #FFD700; width: 100%; min-height: 100px; }
+        .podium-2 .podium-base { background-color: #C0C0C0; width: 100%; min-height: 75px; }
+        .podium-3 .podium-base { background-color: #CD7F32; width: 100%; min-height: 50px; }
+        
+        /* Rank Badge Styles */
+        .rank-badge { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.25rem 0.75rem; border-radius: 999px; font-weight: bold; border: 2px solid; }
+        .badge-gold { background: linear-gradient(45deg, #FFD700, #FBB034); color: #4A2E00; border-color: #FEE101; box-shadow: 0 0 10px #FBB034; }
+        .badge-silver { background: linear-gradient(45deg, #E0E0E0, #BDBDBD); color: #333; border-color: #F5F5F5; box-shadow: 0 0 10px #BDBDBD; }
+        .badge-bronze { background: linear-gradient(45deg, #CD7F32, #A0522D); color: white; border-color: #D2691E; box-shadow: 0 0 10px #A0522D; }
+        .badge-iron { background-color: #757575; color: white; border-color: #9E9E9E; }
+        .badge-stone { background-color: #B0BEC5; color: #263238; border-color: #CFD8DC; }
+        .badge-wood { background-color: #8D6E63; color: white; border-color: #A1887F; }
     </style>
 </head>
-<body>
-    <div id="main-container">
-        <canvas id="particle-canvas"></canvas>
+<body class="bg-gray-100">
+    <!-- Overlays and Loaders -->
+    <div id="skill-effect-overlay"></div>
+    <div id="main-loader" class="fixed inset-0 bg-white/80 flex justify-center items-center z-[2000]"><div class="loader"></div></div>
+    <div id="modal-container"></div>
+    <div id="battle-effects-container"></div>
+
+    <!-- Navigation Bar -->
+    <nav class="bg-white shadow-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <span class="font-title text-2xl text-blue-600 cursor-pointer" id="home-btn">HIPOKETMON</span>
+                </div>
+                <div id="nav-links" class="flex items-center gap-2 sm:gap-4"></div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Auth View -->
+    <div id="auth-view" class="view">
+        <div class="max-w-md mx-auto mt-10 p-8 bg-white rounded-lg shadow-lg">
+            <div id="auth-tabs" class="flex border-b mb-6">
+                <button data-tab="login" class="tab-btn flex-1 py-2 font-bold text-gray-500 border-b-2 border-transparent">로그인</button>
+                <button data-tab="signup" class="tab-btn flex-1 py-2 font-bold text-gray-500 border-b-2 border-transparent">회원가입</button>
+            </div>
+            <!-- Login Form -->
+            <form id="login-form" class="auth-form space-y-4">
+                <input type="email" id="login-email" placeholder="이메일" class="w-full p-3 border rounded-lg" required>
+                <input type="password" id="login-password" placeholder="비밀번호" class="w-full p-3 border rounded-lg" required>
+                <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700">로그인</button>
+            </form>
+            <!-- Signup Form -->
+            <form id="signup-form" class="auth-form space-y-4 hidden">
+                <input type="email" id="signup-email" placeholder="이메일" class="w-full p-3 border rounded-lg" required>
+                <input type="password" id="signup-password" placeholder="비밀번호" class="w-full p-3 border rounded-lg" required>
+                <button type="submit" class="w-full bg-green-600 text-white font-bold py-3 rounded-lg hover:bg-green-700">회원가입 (5 크레딧 지급)</button>
+            </form>
+            <p id="auth-error" class="text-red-500 text-center mt-4"></p>
+        </div>
     </div>
 
-    <div id="info-panel" class="rounded-lg">
-        <h1 class="text-2xl mb-4">PARTICLE SYNC</h1>
-        <p id="status-text" class="mb-4">Awaiting initialization...</p>
-        <button id="start-button">[ START SYNC ]</button>
+    <!-- Main Pokedex View -->
+    <div id="pokedex-view" class="view">
+        <div class="max-w-7xl mx-auto p-4 sm:p-6 md:p-8">
+            <header class="text-center mb-8">
+                <h1 class="font-title text-5xl md:text-6xl text-gray-800">하이포켓몬</h1>
+                <p class="text-gray-600 mt-2">새로운 포켓몬에게 Hi! 하고 인사해주세요!</p>
+                 <div class="mt-4 flex justify-center flex-wrap gap-2 sm:gap-4">
+                    <button id="go-to-battle-btn" class="bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-700 transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed">배틀 아레나</button>
+                    <button id="go-to-ranking-btn" class="bg-yellow-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-yellow-600 transition-transform transform hover:scale-105">랭킹 보기</button>
+                    <button id="show-type-chart-btn" class="bg-blue-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-600 transition-transform transform hover:scale-105">상성표</button>
+                    <button id="show-rarity-table-btn" class="bg-purple-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-purple-600 transition-transform transform hover:scale-105">등급표</button>
+                </div>
+            </header>
+
+            <!-- Ranking Podium -->
+            <div id="ranking-podium-container" class="mb-12">
+                <h2 class="font-title text-3xl text-center mb-4 text-gray-700">명예의 전당</h2>
+                <div id="ranking-podium-view" class="podium"></div>
+            </div>
+
+            <div id="character-creation-section" class="bg-white p-6 rounded-2xl shadow-lg mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <select id="universe-select" class="p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <option value="pokemon">포켓몬스터</option>
+                        <option value="haunted_house">신비아파트</option>
+                    </select>
+                    <input type="text" id="character-prompt" class="md:col-span-2 p-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="예: 거미 다리에 몸은 피카츄, 얼굴은 슈퍼마리오">
+                </div>
+                <div class="mt-4 flex justify-center items-center gap-4">
+                    <button id="generate-btn" class="bg-blue-600 text-white font-bold py-3 px-6 rounded-lg hover:bg-blue-700 transition-transform transform hover:scale-105">
+                        <span id="btn-text">캐릭터 생성! (1 크레딧)</span>
+                        <span id="btn-loader" class="hidden w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    </button>
+                </div>
+                <div id="error-message" class="text-yellow-600 mt-4 text-center text-sm font-semibold"></div>
+            </div>
+             <div id="filter-container" class="flex justify-center gap-2 mb-6">
+                 <button class="filter-btn active" data-filter="all">전체</button>
+                 <button class="filter-btn" data-filter="pokemon">포켓몬스터</button>
+                 <button class="filter-btn" data-filter="haunted_house">신비아파트</button>
+             </div>
+            <div id="pokedex-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"></div>
+            <div id="empty-state" class="text-center py-16 px-6 bg-white rounded-2xl shadow-lg hidden"><h3 class="mt-4 text-xl font-semibold text-gray-800">도감이 비어있습니다. 첫 캐릭터를 생성해보세요!</h3></div>
+        </div>
     </div>
+    
+    <!-- Other Views (Containers) -->
+    <div id="detail-view" class="view"></div>
+    <div id="battle-selection-view" class="view"></div>
+    <div id="battle-arena-view" class="view"></div>
+    <div id="ranking-view" class="view"></div>
+    <div id="profile-view" class="view"></div>
+    <div id="admin-view" class="view"></div>
 
-    <video id="video-feed" autoplay playsinline class="hidden"></video>
+    <script type="module">
+        // --- Supabase Client Setup ---
+        const { createClient } = supabase;
+        const SUPABASE_URL = 'https://yqnyinreoamegbahoxzq.supabase.co';
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlxbnlpbnJlb2FtZWdiYWhveHpxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTUxMzgxNjMsImV4cCI6MjA3MDcxNDE2M30.GjzEs-MNYlk1JUncO_A4wimYdD6JXfiqKZvI1ugR47o';
+        const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-<script type="module">
-    import * as THREE from 'three';
-    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        // --- DOM Elements ---
+        const views = document.querySelectorAll('.view');
+        const mainLoader = document.getElementById('main-loader');
+        const modalContainer = document.getElementById('modal-container');
+        const navLinks = document.getElementById('nav-links');
+        const homeBtn = document.getElementById('home-btn');
+        const authView = document.getElementById('auth-view');
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const loginForm = document.getElementById('login-form');
+        const signupForm = document.getElementById('signup-form');
+        const authError = document.getElementById('auth-error');
+        const generateBtn = document.getElementById('generate-btn');
+        const universeSelect = document.getElementById('universe-select');
+        const promptInput = document.getElementById('character-prompt');
+        const pokedexContainer = document.getElementById('pokedex-container');
+        const emptyState = document.getElementById('empty-state');
+        const errorMessage = document.getElementById('error-message');
+        const btnText = document.getElementById('btn-text');
+        const btnLoader = document.getElementById('btn-loader');
+        const goToBattleBtn = document.getElementById('go-to-battle-btn');
+        const goToRankingBtn = document.getElementById('go-to-ranking-btn');
+        const showTypeChartBtn = document.getElementById('show-type-chart-btn');
+        const showRarityTableBtn = document.getElementById('show-rarity-table-btn');
+        const characterCreationSection = document.getElementById('character-creation-section');
+        const detailViewContainer = document.getElementById('detail-view');
+        const battleSelectionViewContainer = document.getElementById('battle-selection-view');
+        const battleArenaContainer = document.getElementById('battle-arena-view');
+        const rankingViewContainer = document.getElementById('ranking-view');
+        const profileViewContainer = document.getElementById('profile-view');
+        const adminViewContainer = document.getElementById('admin-view');
+        const skillEffectOverlay = document.getElementById('skill-effect-overlay');
+        const rankingPodiumView = document.getElementById('ranking-podium-view');
+        const filterBtns = document.querySelectorAll('.filter-btn');
+        const battleEffectsContainer = document.getElementById('battle-effects-container');
 
-    const statusText = document.getElementById('status-text');
-    const startButton = document.getElementById('start-button');
-    const video = document.getElementById('video-feed');
-    const canvas = document.getElementById('particle-canvas');
+        // --- App State & Data (Local Cache) ---
+        let currentUser = null;
+        let currentProfile = null;
+        let allCharacters = [];
+        let allProfiles = [];
+        let characterSubscription = null;
+        let activeFilter = 'all';
+        const battleBackgrounds = [
+            'https://yqnyinreoamegbahoxzq.supabase.co/storage/v1/object/public/battle_images/producerbp-1-2022-10-24.jpg',
+            'https://yqnyinreoamegbahoxzq.supabase.co/storage/v1/object/public/battle_images/producerbp-1-2021-02-16.jpg',
+            'https://yqnyinreoamegbahoxzq.supabase.co/storage/v1/object/public/battle_images/producerbp-1-2020-06-10.jpg',
+            'https://yqnyinreoamegbahoxzq.supabase.co/storage/v1/object/public/battle_images/producerbp-1-2019-07-26.jpg',
+            'https://yqnyinreoamegbahoxzq.supabase.co/storage/v1/object/public/battle_images/producerbp-1-2019-03-13.jpg',
+            'https://yqnyinreoamegbahoxzq.supabase.co/storage/v1/object/public/battle_images/2021-pokemon-battle-pokemon-unite-online-video-game-wallpaper-2560x1600-74929_7.jpg'
+        ];
+        const typeChart = { Normal: { Rock: 0.5, Ghost: 0, Steel: 0.5 }, Fire: { Fire: 0.5, Water: 0.5, Grass: 2, Ice: 2, Bug: 2, Rock: 0.5, Dragon: 0.5, Steel: 2 }, Water: { Fire: 2, Water: 0.5, Grass: 0.5, Ground: 2, Rock: 2, Dragon: 0.5 }, Electric: { Water: 2, Electric: 0.5, Grass: 0.5, Ground: 0, Flying: 2, Dragon: 0.5 }, Grass: { Fire: 0.5, Water: 2, Grass: 0.5, Poison: 0.5, Ground: 2, Flying: 0.5, Bug: 0.5, Rock: 2, Dragon: 0.5, Steel: 0.5 }, Ice: { Fire: 0.5, Water: 0.5, Grass: 2, Ice: 0.5, Ground: 2, Flying: 2, Dragon: 2, Steel: 0.5 }, Fighting: { Normal: 2, Ice: 2, Poison: 0.5, Flying: 0.5, Psychic: 0.5, Bug: 0.5, Rock: 2, Ghost: 0, Darkness: 2, Steel: 2, Fairy: 0.5 }, Poison: { Grass: 2, Poison: 0.5, Ground: 0.5, Rock: 0.5, Ghost: 0.5, Steel: 0, Fairy: 2 }, Ground: { Fire: 2, Electric: 2, Grass: 0.5, Poison: 2, Flying: 0, Bug: 0.5, Rock: 2, Steel: 2 }, Flying: { Electric: 0.5, Grass: 2, Fighting: 2, Bug: 2, Rock: 0.5, Steel: 0.5 }, Psychic: { Fighting: 2, Poison: 2, Psychic: 0.5, Darkness: 2, Steel: 0.5 }, Bug: { Fire: 0.5, Grass: 2, Fighting: 0.5, Poison: 0.5, Flying: 0.5, Psychic: 2, Ghost: 0.5, Darkness: 2, Steel: 0.5, Fairy: 0.5 }, Rock: { Fire: 2, Ice: 2, Fighting: 0.5, Ground: 0.5, Flying: 2, Bug: 2, Steel: 0.5 }, Ghost: { Normal: 0, Psychic: 2, Ghost: 2, Darkness: 0.5, Light: 2 }, Dragon: { Dragon: 2, Steel: 0.5, Fairy: 0 }, Steel: { Fire: 0.5, Water: 0.5, Electric: 0.5, Ice: 2, Rock: 2, Steel: 0.5, Fairy: 2, Light: 0.5 }, Fairy: { Fighting: 2, Poison: 0.5, Dragon: 2, Darkness: 2, Steel: 0.5 }, Light: { Ghost: 2, Darkness: 2, Grass: 0.5, Steel: 0.5, Fire: 0.5 }, Darkness: { Psychic: 2, Ghost: 2, Light: 2, Fighting: 0.5, Fairy: 0.5 } };
+        const typeTranslations = { Normal: '노말', Fire: '불꽃', Water: '물', Electric: '전기', Grass: '풀', Ice: '얼음', Fighting: '격투', Poison: '독', Ground: '땅', Flying: '비행', Psychic: '에스퍼', Bug: '벌레', Rock: '바위', Ghost: '고스트', Dragon: '드래곤', Darkness: '악', Steel: '강철', Fairy: '페어리', Light: '빛' };
 
-    let scene, camera, renderer, controls, particleSystem, particleGeometry;
-    let faceDetector;
-
-    const NUM_KEYPOINTS = 468; // MediaPipe FaceMesh has 468 landmarks
-
-    // --- 1. Initialization ---
-    function init() {
-        // Scene setup
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.z = 15;
-        
-        renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-
-        controls = new OrbitControls(camera, renderer.domElement);
-        controls.enableDamping = true;
-        controls.enablePan = false;
-        controls.enableZoom = true;
-
-        // Create the initial particle system
-        particleGeometry = new THREE.BufferGeometry();
-        const positions = new Float32Array(NUM_KEYPOINTS * 3);
-        particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-        
-        const particleMaterial = new THREE.PointsMaterial({
-            color: 0x00f7ff,
-            size: 0.1,
-            blending: THREE.AdditiveBlending,
-            transparent: true,
-            depthWrite: false,
-        });
-
-        particleSystem = new THREE.Points(particleGeometry, particleMaterial);
-        scene.add(particleSystem);
-
-        window.addEventListener('resize', onWindowResize, false);
-        animate();
-        statusText.textContent = "Ready. Press START SYNC to begin.";
-    }
-
-    function onWindowResize() {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    function animate() {
-        requestAnimationFrame(animate);
-        controls.update();
-        renderer.render(scene, camera);
-    }
-
-    // --- 2. Face Tracking Setup ---
-    async function setupFaceTracking() {
-        statusText.textContent = "Requesting webcam access...";
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: { width: 640, height: 480 },
-                audio: false,
-            });
-            video.srcObject = stream;
-            await new Promise((resolve) => {
-                video.onloadedmetadata = resolve;
-            });
-        } catch (err) {
-            statusText.textContent = "ERROR: Webcam access denied.";
-            console.error(err);
-            return;
-        }
-
-        statusText.textContent = "Loading FaceMesh model...";
-        const model = faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh;
-        const detectorConfig = {
-            runtime: 'mediapipe',
-            solutionPath: 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh@0.4.1633559619',
-        };
-        faceDetector = await faceLandmarksDetection.createDetector(model, detectorConfig);
-        
-        statusText.textContent = "Sync established. Tracking face...";
-        detectFace();
-    }
-
-    // --- 3. Detection Loop & 3D Update ---
-    async function detectFace() {
-        if (!faceDetector) return;
-
-        const faces = await faceDetector.estimateFaces(video, { flipHorizontal: false });
-
-        if (faces.length > 0) {
-            const keypoints = faces[0].keypoints;
-            const positions = particleGeometry.attributes.position.array;
-
-            for (let i = 0; i < keypoints.length; i++) {
-                // Normalize and scale coordinates to fit the 3D scene
-                const x = (keypoints[i].x / video.width - 0.5) * 20;
-                const y = -(keypoints[i].y / video.height - 0.5) * 20;
-                const z = -(keypoints[i].z / 100) * 20; // Scale and invert Z
-
-                positions[i * 3] = x;
-                positions[i * 3 + 1] = y;
-                positions[i * 3 + 2] = z;
+        // --- Sound Engine ---
+        let synths = {};
+        function setupAudio() {
+            if (Tone.context.state !== 'running') {
+                Tone.start();
             }
-            particleGeometry.attributes.position.needsUpdate = true;
+            if (!synths.hit) {
+                synths.hit = new Tone.MembraneSynth().toDestination();
+                synths.crit = new Tone.MetalSynth({ frequency: 200, envelope: { attack: 0.001, decay: 0.1, release: 0.01 }, harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5 }).toDestination();
+                synths.superEffective = new Tone.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.2, release: 0.2 } }).toDestination();
+                synths.victory = new Tone.PolySynth(Tone.Synth).toDestination();
+                synths.defeat = new Tone.PolySynth(Tone.FMSynth).toDestination();
+                synths.uiClick = new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.001, decay: 0.1, sustain: 0, release: 0.1 } }).toDestination();
+            }
+        }
+        const playHitSound = () => synths.hit?.triggerAttackRelease("C2", "8n");
+        const playCritSound = () => synths.crit?.triggerAttackRelease("C5", "16n");
+        const playSuperEffectiveSound = () => synths.superEffective?.triggerAttackRelease("G5", "16n");
+        const playVictorySound = () => synths.victory?.triggerAttackRelease(["C5", "E5", "G5", "C6"], "8n", Tone.now());
+        const playDefeatSound = () => synths.defeat?.triggerAttackRelease(["C3", "A2"], "2n");
+        const playUiClickSound = () => synths.uiClick?.triggerAttackRelease("C5", "16n");
+
+        // --- Navigation & UI Helpers ---
+        function navigateTo(viewId, ...args) {
+            views.forEach(v => v.classList.remove('active'));
+            const targetView = document.getElementById(viewId);
+            if (targetView) {
+                targetView.classList.add('active');
+                window.scrollTo(0, 0);
+                const renderFunctionName = `render${viewId.charAt(0).toUpperCase() + viewId.slice(1).replace(/-./g, x=>x[1].toUpperCase())}`;
+                if (window[renderFunctionName] && typeof window[renderFunctionName] === 'function') {
+                    window[renderFunctionName](...args);
+                }
+            }
+        }
+        window.navigateTo = navigateTo;
+        
+        function setLoadingState(isLoading) {
+            generateBtn.disabled = isLoading;
+            btnText.classList.toggle('hidden', isLoading);
+            btnLoader.classList.toggle('hidden', !isLoading);
         }
 
-        requestAnimationFrame(detectFace);
-    }
+        function showModal(title, content, onConfirm) {
+            const modalHTML = `
+                <div id="modal-overlay" class="modal-overlay">
+                    <div class="modal-content w-full max-w-lg">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-2xl font-bold">${title}</h2>
+                            <button id="close-modal-btn" class="text-gray-500 hover:text-gray-800 text-2xl">&times;</button>
+                        </div>
+                        <div>${content}</div>
+                        ${onConfirm ? '<div class="mt-6 flex justify-end gap-3"><button id="confirm-btn" class="bg-red-600 text-white font-bold py-2 px-4 rounded-lg">확인</button><button id="cancel-btn" class="bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg">취소</button></div>' : ''}
+                    </div>
+                </div>
+            `;
+            modalContainer.innerHTML = modalHTML;
+            document.getElementById('close-modal-btn').onclick = closeModal;
+            const overlay = document.getElementById('modal-overlay');
+            overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
+            if (onConfirm) {
+                document.getElementById('confirm-btn').onclick = () => { onConfirm(); closeModal(); };
+                document.getElementById('cancel-btn').onclick = closeModal;
+            }
+        }
 
-    // --- Event Listeners ---
-    startButton.addEventListener('click', async () => {
-        startButton.disabled = true;
-        await setupFaceTracking();
-    });
+        function closeModal() {
+            modalContainer.innerHTML = '';
+        }
+        window.closeModal = closeModal;
 
-    init();
-</script>
+        function showTypeChartModal() {
+            let chartHtml = '<div class="type-chart-grid">';
+            const types = Object.keys(typeTranslations);
+            chartHtml += types.map(attacker => {
+                let cellHtml = `<div class="type-chart-cell type-${attacker}"><strong>${typeTranslations[attacker]}</strong><div class="text-xs">`;
+                const effectiveness = typeChart[attacker] || {};
+                cellHtml += Object.keys(effectiveness).map(defender => {
+                    const multiplier = effectiveness[defender];
+                    const defenderKorean = typeTranslations[defender] || defender;
+                    if (multiplier === 2) return ` <span class="font-bold text-green-700">${defenderKorean}(2x)</span>`;
+                    if (multiplier === 0.5) return ` <span class="font-bold text-red-700">${defenderKorean}(0.5x)</span>`;
+                    if (multiplier === 0) return ` <span class="font-bold text-gray-700">${defenderKorean}(0x)</span>`;
+                    return '';
+                }).join('');
+                return cellHtml + '</div></div>';
+            }).join('');
+            chartHtml += '</div>';
+            showModal('타입 상성표', chartHtml);
+        }
+
+        function showRarityModal() {
+            const content = `
+                <table class="w-full text-left">
+                    <thead><tr class="bg-gray-100"><th class="p-2">등급</th><th class="p-2">총 능력치 (BST)</th><th class="p-2">예상 확률</th></tr></thead>
+                    <tbody>
+                        <tr class="border-b"><td class="p-2"><span class="rarity-badge rarity-신화">신화</span></td><td class="p-2">780 ~</td><td class="p-2">~ 5%</td></tr>
+                        <tr class="border-b"><td class="p-2"><span class="rarity-badge rarity-고대">고대</span></td><td class="p-2">660 - 779</td><td class="p-2">~ 10%</td></tr>
+                        <tr class="border-b"><td class="p-2"><span class="rarity-badge rarity-전설">전설</span></td><td class="p-2">540 - 659</td><td class="p-2">~ 15%</td></tr>
+                        <tr class="border-b"><td class="p-2"><span class="rarity-badge rarity-에픽">에픽</span></td><td class="p-2">420 - 539</td><td class="p-2">~ 20%</td></tr>
+                        <tr class="border-b"><td class="p-2"><span class="rarity-badge rarity-희귀">희귀</span></td><td class="p-2">300 - 419</td><td class="p-2">~ 25%</td></tr>
+                        <tr><td class="p-2"><span class="rarity-badge rarity-일반">일반</span></td><td class="p-2">~ 299</td><td class="p-2">~ 25%</td></tr>
+                    </tbody>
+                </table>
+            `;
+            showModal('캐릭터 등급표', content);
+        }
+
+        function updateUIBasedOnAuthState() {
+            navLinks.innerHTML = '';
+            if (currentUser && currentProfile) {
+                const nickname = currentProfile.nickname || currentUser.email.split('@')[0];
+                navLinks.innerHTML = `
+                    <span class="font-bold text-sm sm:text-base text-gray-700 hidden md:inline">환영합니다, ${nickname}님!</span>
+                    <span class="font-bold text-sm sm:text-base text-yellow-500">크레딧: ${currentProfile.credits}</span>
+                    <button class="font-bold text-sm sm:text-base text-blue-600 hover:underline p-2" id="profile-btn">마이페이지</button>
+                    ${currentProfile.is_admin ? `<button id="admin-btn" class="font-bold text-sm sm:text-base text-purple-600 hover:underline p-2">관리자</button>` : ''}
+                    <button id="logout-btn" class="font-bold text-sm sm:text-base text-red-600 hover:underline p-2">로그아웃</button>
+                `;
+                document.getElementById('profile-btn').onclick = () => navigateTo('profile-view', currentUser.id);
+                if (currentProfile.is_admin) document.getElementById('admin-btn').onclick = () => navigateTo('admin-view');
+                document.getElementById('logout-btn').onclick = handleLogout;
+                characterCreationSection.style.display = 'block';
+                goToBattleBtn.disabled = false;
+            } else {
+                navLinks.innerHTML = `<button id="login-signup-btn" class="font-bold text-blue-600 hover:underline p-2">로그인 / 회원가입</button>`;
+                document.getElementById('login-signup-btn').onclick = () => navigateTo('auth-view');
+                characterCreationSection.style.display = 'none';
+                goToBattleBtn.disabled = true;
+            }
+        }
+
+        // --- Data Fetching & Realtime ---
+        async function initialDataLoad() {
+            mainLoader.style.display = 'flex';
+            try {
+                const [profilesRes, charactersRes] = await Promise.all([
+                    supabaseClient.from('battle_profiles').select('*'),
+                    supabaseClient.from('battle_characters').select('*, profile:battle_profiles(id, nickname, email)')
+                ]);
+                if (profilesRes.error) throw profilesRes.error;
+                if (charactersRes.error) throw charactersRes.error;
+                allProfiles = profilesRes.data;
+                allCharacters = charactersRes.data.map(c => ({ ...c.data, id: c.id, created_at: c.created_at, creator_id: c.creator_id, rank_points: c.rank_points, image_url: c.image_url, profile: c.profile }));
+                if (currentUser) currentProfile = allProfiles.find(p => p.id === currentUser.id);
+                updateUIBasedOnAuthState();
+                navigateTo('pokedex-view');
+            } catch (error) {
+                console.error("Error on initial data load:", error);
+                showModal('데이터 로딩 오류', `<p>데이터를 불러오는 데 실패했습니다: ${error.message}</p>`);
+            } finally {
+                mainLoader.style.display = 'none';
+            }
+        }
+
+        function handleRealtimeChanges(payload) {
+            console.log('Realtime change received:', payload);
+            const { eventType, new: newRecord, old: oldRecord, table } = payload;
+            let id;
+            if (eventType === 'DELETE') id = oldRecord.id;
+            else id = newRecord.id;
+
+            if (table === 'battle_characters') {
+                if (eventType === 'INSERT') {
+                    allCharacters.push({ ...newRecord.data, id: newRecord.id, created_at: newRecord.created_at, creator_id: newRecord.creator_id, rank_points: newRecord.rank_points, image_url: newRecord.image_url, profile: allProfiles.find(p => p.id === newRecord.creator_id) });
+                } else if (eventType === 'UPDATE') {
+                    const index = allCharacters.findIndex(c => c.id === id);
+                    if (index > -1) allCharacters[index] = { ...allCharacters[index], ...allCharacters[index].data, ...newRecord.data, rank_points: newRecord.rank_points };
+                } else if (eventType === 'DELETE') {
+                    allCharacters = allCharacters.filter(c => c.id !== id);
+                }
+            } else if (table === 'battle_profiles') {
+                const index = allProfiles.findIndex(p => p.id === id);
+                if (eventType === 'INSERT' && index === -1) allProfiles.push(newRecord);
+                else if (eventType === 'UPDATE' && index > -1) allProfiles[index] = { ...allProfiles[index], ...newRecord };
+            }
+            
+            const activeView = document.querySelector('.view.active');
+            if (activeView && activeView.id !== 'battle-arena-view') {
+                const renderFunctionName = `render${activeView.id.charAt(0).toUpperCase() + activeView.id.slice(1).replace(/-./g, x=>x[1].toUpperCase())}`;
+                 if (window[renderFunctionName] && typeof window[renderFunctionName] === 'function') {
+                    const currentId = activeView.dataset.id;
+                    window[renderFunctionName](currentId);
+                }
+            }
+            if (document.getElementById('pokedex-view').classList.contains('active')) {
+                 renderRankingPodium();
+            }
+            if (currentUser && currentProfile && id === currentUser.id) {
+                currentProfile = allProfiles.find(p => p.id === currentUser.id);
+                updateUIBasedOnAuthState();
+            }
+        }
+
+        function subscribeToChanges() {
+            if (characterSubscription) characterSubscription.unsubscribe();
+            characterSubscription = supabaseClient.channel('hipoketmon-db-changes')
+                .on('postgres_changes', { event: '*', schema: 'public' }, handleRealtimeChanges)
+                .subscribe();
+        }
+
+        // --- Authentication ---
+        async function listenToAuthStateChanges() {
+            supabaseClient.auth.onAuthStateChange(async (_event, session) => {
+                currentUser = session?.user || null;
+                currentProfile = currentUser ? allProfiles.find(p => p.id === currentUser.id) : null;
+                if (_event === 'SIGNED_IN' && !currentProfile) {
+                    const { data } = await supabaseClient.from('battle_profiles').select('*');
+                    if(data) allProfiles = data;
+                    currentProfile = allProfiles.find(p => p.id === currentUser.id);
+                }
+                updateUIBasedOnAuthState();
+                if (!currentUser) navigateTo('pokedex-view');
+            });
+        }
+
+        async function handleSignup(e) {
+            e.preventDefault();
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            const { error } = await supabaseClient.auth.signUp({ email, password });
+            if (error) authError.textContent = `회원가입 오류: ${error.message}`;
+            else {
+                authError.textContent = '';
+                showModal('회원가입 성공!', '<p>성공적으로 가입되었습니다. 잠시 후 자동으로 로그인됩니다.</p>');
+            }
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            if (error) authError.textContent = `로그인 오류: ${error.message}`;
+            else {
+                authError.textContent = '';
+                navigateTo('pokedex-view');
+            }
+        }
+
+        async function handleLogout() {
+            await supabaseClient.auth.signOut();
+        }
+        
+        // --- Character Generation ---
+        function determineRarityAndBST() {
+            const rand = Math.random();
+            if (rand < 0.05) return { rarity: '신화', bstRange: { min: 780, max: 850 } }; // 5%
+            if (rand < 0.15) return { rarity: '고대', bstRange: { min: 660, max: 779 } }; // 10%
+            if (rand < 0.30) return { rarity: '전설', bstRange: { min: 540, max: 659 } }; // 15%
+            if (rand < 0.50) return { rarity: '에픽', bstRange: { min: 420, max: 539 } }; // 20%
+            if (rand < 0.75) return { rarity: '희귀', bstRange: { min: 300, max: 419 } }; // 25%
+            return { rarity: '일반', bstRange: { min: 250, max: 299 } }; // 25%
+        }
+
+        async function generateCharacter() {
+            if (!currentUser) { showModal('로그인 필요', '<p>캐릭터를 생성하려면 로그인이 필요합니다.</p>'); navigateTo('auth-view'); return; }
+            
+            const { data: freshProfile, error: profileError } = await supabaseClient.from('battle_profiles').select('credits').eq('id', currentUser.id).single();
+            if (profileError) { showModal('오류', `<p>프로필 정보를 불러오는 데 실패했습니다: ${profileError.message}</p>`); return; }
+            currentProfile.credits = freshProfile.credits;
+            updateUIBasedOnAuthState();
+
+            if (currentProfile.credits < 1) { showModal('크레딧 부족', '<p>크레딧이 부족합니다. 매일 마이페이지에서 출석체크로 크레딧을 얻으세요!</p>'); return; }
+            
+            const userPrompt = promptInput.value.trim();
+            if (!userPrompt) { errorMessage.textContent = '생성할 캐릭터에 대한 아이디어를 입력해주세요.'; return; }
+            
+            setLoadingState(true);
+            errorMessage.textContent = '캐릭터 컨셉 구상 중... (최대 1분 소요)';
+            
+            try {
+                const universe = universeSelect.value;
+                const { rarity, bstRange } = determineRarityAndBST();
+                const [imageUrlBase64, newCharData] = await Promise.all([ generateCharacterImage(userPrompt, universe), generateCharacterData(userPrompt, universe, rarity, bstRange) ]);
+                
+                errorMessage.textContent = '캐릭터를 현실 세계로 소환하는 중...';
+                
+                const imageBlob = base64ToBlob(imageUrlBase64, 'image/png');
+                const filePath = `${currentUser.id}/${Date.now()}.png`;
+                const { error: uploadError } = await supabaseClient.storage.from('battle_images').upload(filePath, imageBlob);
+                if (uploadError) throw uploadError;
+
+                const { data: { publicUrl } } = supabaseClient.storage.from('battle_images').getPublicUrl(filePath);
+                
+                const universeName = universe === 'pokemon' ? '포켓몬스터' : '신비아파트';
+                const finalCharacterData = { ...newCharData, rarity, universe: universeName };
+
+                const { error: insertError } = await supabaseClient.from('battle_characters').insert({ creator_id: currentUser.id, image_url: publicUrl, data: finalCharacterData });
+                if (insertError) throw insertError;
+                
+                const { error: creditError } = await supabaseClient.from('battle_profiles').update({ credits: currentProfile.credits - 1 }).eq('id', currentUser.id);
+                if (creditError) throw creditError;
+                
+                currentProfile.credits -= 1;
+                updateUIBasedOnAuthState();
+
+                promptInput.value = '';
+                errorMessage.textContent = '';
+                showModal('생성 성공!', `<p>새로운 캐릭터 <strong>${finalCharacterData.name}</strong>(${rarity})이(가) 도감에 추가되었습니다!</p>`);
+
+            } catch (error) {
+                console.error("Character Generation Error:", error);
+                showModal('생성 실패', `<p>생성 중 오류가 발생했습니다. 크레딧은 차감되지 않았습니다. <br>오류: ${error.message}</p>`);
+                errorMessage.textContent = `⚠️ 생성 중 오류가 발생했습니다.`;
+            } finally {
+                setLoadingState(false);
+            }
+        }
+        
+        async function callApiWithRetry(apiUrl, payload, retries = 3, delay = 1000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (!response.ok) {
+                        if (response.status === 429) { await new Promise(res => setTimeout(res, delay * (i + 1))); continue; }
+                        throw new Error(`API Error (${response.status}): ${await response.text()}`);
+                    }
+                    return response.json();
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    await new Promise(res => setTimeout(res, delay * (i + 1)));
+                }
+            }
+        }
+
+        async function generateCharacterImage(prompt, universe) {
+            const apiKey = ""; // The environment will inject the key.
+            const stylePrompt = universe === 'pokemon' 
+                ? "The visual style should be inspired by modern monster-catching anime like Pokémon."
+                : "The visual style should be inspired by the dark, spooky style of 'Shinbi Apartment'.";
+            
+            const fullPrompt = `Primary instruction: Generate a character based **only** on the following detailed description: "${prompt}". The visual elements described by the user are the absolute priority. Secondary instruction: Render this character in a high-quality anime style suitable for a monster-catching game, on a clean white background. Do not let the style override the primary description.`;
+            
+            const payload = { instances: [{ prompt: fullPrompt }], parameters: { "sampleCount": 1 } };
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
+            const result = await callApiWithRetry(apiUrl, payload);
+            if (result.predictions?.[0]?.bytesBase64Encoded) return `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+            throw new Error("Image data was not returned from the API.");
+        }
+
+        async function generateCharacterData(prompt, universe, rarity, bstRange) {
+            const apiKey = ""; // The environment will inject the key.
+            const gameRules = `
+--- 게임 규칙 ---
+1. 타입 상성: ${JSON.stringify(typeChart)}
+---
+`;
+            const basePrompt = `
+${gameRules}
+**절대 규칙:**
+1.  **등급:** "${rarity}"
+2.  **총 능력치 (BST):** 반드시 ${bstRange.min}과 ${bstRange.max} 사이의 값으로 생성해야 합니다.
+
+위의 절대 규칙을 반드시 준수하여, 다음 설명을 기반으로 새로운 캐릭터를 창조해주세요: "${prompt}".
+
+**생성 지침:**
+1.  **능력치 (Stats):** 주어진 BST 범위 내에서 능력치를 분배해주세요. 체력(HP)은 다른 스탯보다 4~6배 높게 설정하여 배틀이 길게 이어지도록 해주세요.
+2.  **타입 (Types):** 캐릭터의 설명에 가장 어울리는 타입을 2개 부여해주세요. 위 '타입 상성' 표에 있는 타입(${Object.keys(typeTranslations).join(', ')}) 중에서만 선택해야 합니다.
+3.  **기술 (Moves):** 4개의 기술을 생성해주세요.
+    - **상태 이상 기술:** 4개의 기술 중 3개는 반드시 'statusEffect'가 'none'이어야 합니다. 나머지 1개의 기술에만 **15%의 낮은 확률**로 'poison', 'paralysis', 또는 'sleep' 중 하나의 'statusEffect'를 부여할 수 있습니다. 상태 이상 효과를 부여할 경우, 'statusChance'는 0.3으로 설정해주세요.
+
+**중요: 모든 결과물(name, classification, pokedexEntry, moves.name, moves.description 등)은 반드시 한국어로 작성해주세요.**
+
+JSON 스키마에 맞춰 답변해주세요.
+`;
+            const universeSpecificPrompt = universe === 'pokemon' ? `이 캐릭터는 '포켓몬스터' 세계관의 포켓몬입니다.` : `이 캐릭터는 '신비아파트' 세계관의 귀신입니다.`;
+            const fullPrompt = `${basePrompt} ${universeSpecificPrompt}`;
+            const schema = { type: "OBJECT", properties: { name: { type: "STRING" }, classification: { type: "STRING" }, types: { type: "ARRAY", items: { type: "STRING" } }, ability: { type: "STRING" }, hiddenAbility: { type: "STRING" }, height: { type: "NUMBER" }, weight: { type: "NUMBER" }, pokedexEntry: { type: "STRING" }, stats: { type: "OBJECT", properties: { hp: { type: "INTEGER" }, attack: { type: "INTEGER" }, defense: { type: "INTEGER" }, sp_atk: { type: "INTEGER" }, sp_def: { type: "INTEGER" }, speed: { type: "INTEGER" } } }, moves: { type: "ARRAY", items: { type: "OBJECT", properties: { name: { type: "STRING" }, description: { type: "STRING" }, type: { type: "STRING" }, power: { type: "INTEGER" }, category: { type: "STRING", enum: ["Physical", "Special", "Status"] }, statusEffect: { type: "STRING", enum: ["poison", "paralysis", "sleep", "none"] }, statusChance: { type: "NUMBER" } } } } }, required: ["name", "classification", "types", "ability", "pokedexEntry", "stats", "moves"] };
+            const payload = { contents: [{ parts: [{ text: fullPrompt }] }], generationConfig: { responseMimeType: "application/json", responseSchema: schema } };
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            const result = await callApiWithRetry(apiUrl, payload);
+            if (result.candidates?.[0]?.content.parts[0].text) return JSON.parse(result.candidates[0].content.parts[0].text);
+            throw new Error("Character data generation failed.");
+        }
+        
+        // --- Battle & Ranking Logic ---
+        function calculateDamage(attacker, defender, move, isDesperate) {
+            if (move.category === 'Status' || !move.power) return { damage: 0, isCritical: false, effectiveness: 1 };
+            let atkStat = move.category === 'Physical' ? attacker.stats.attack : attacker.stats.sp_atk;
+            const defStat = move.category === 'Physical' ? defender.stats.defense : defender.stats.sp_def;
+            if (isDesperate) atkStat *= 1.25;
+            let damage = (((2 * 40 / 5 + 2) * atkStat * move.power / defStat) / 50) + 2;
+            let effectiveness = 1;
+            defender.types.forEach(defType => {
+                const moveTypeKey = Object.keys(typeTranslations).find(key => typeTranslations[key] === move.type) || move.type;
+                effectiveness *= typeChart[moveTypeKey]?.[defType] ?? 1;
+            });
+            if (attacker.types.some(t => typeTranslations[t] === move.type)) damage *= 1.5;
+            damage *= effectiveness;
+            const isCritical = Math.random() < (isDesperate ? 1/8 : 1/24);
+            if (isCritical) damage *= 1.5;
+            return { damage: Math.floor(damage), isCritical, effectiveness };
+        }
+
+        async function updateRankings(winner, loser) {
+            const K = 32;
+            const winnerRank = winner.rank_points || 1000;
+            const loserRank = loser.rank_points || 1000;
+            const winnerExpected = 1 / (1 + 10 ** ((loserRank - winnerRank) / 400));
+            const newWinnerRank = Math.round(winnerRank + K * (1 - winnerExpected));
+            const newLoserRank = Math.max(0, Math.round(loserRank + K * (0 - (1 - winnerExpected))));
+            await Promise.all([
+                supabaseClient.from('battle_characters').update({ rank_points: newWinnerRank }).eq('id', winner.id),
+                supabaseClient.from('battle_characters').update({ rank_points: newLoserRank }).eq('id', loser.id)
+            ]);
+            return { rankChange: newWinnerRank - winnerRank, newWinnerRank, newLoserRank };
+        }
+        
+        // --- Helper Functions ---
+        function base64ToBlob(base64, contentType = '', sliceSize = 512) {
+            const byteCharacters = atob(base64.split(',')[1]);
+            const byteArrays = [];
+            for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+                const slice = byteCharacters.slice(offset, offset + sliceSize);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i++) byteNumbers[i] = slice.charCodeAt(i);
+                byteArrays.push(new Uint8Array(byteNumbers));
+            }
+            return new Blob(byteArrays, { type: contentType });
+        }
+        
+        // --- Rendering Functions ---
+        window.renderPokedexView = function() {
+            renderRankingPodium();
+            const sorted = [...allCharacters].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            const filtered = activeFilter === 'all' ? sorted : sorted.filter(c => c.universe.replace(' ', '_') === activeFilter);
+            
+            pokedexContainer.innerHTML = '';
+            emptyState.style.display = filtered.length === 0 ? 'block' : 'none';
+            pokedexContainer.style.display = filtered.length > 0 ? 'grid' : 'none';
+            
+            const rankSorted = [...allCharacters].sort((a, b) => (b.rank_points || 1000) - (a.rank_points || 1000));
+
+            filtered.forEach((char) => {
+                const bst = Object.values(char.stats).reduce((a, b) => a + b, 0);
+                const hasStatusMove = char.moves.some(m => m.statusEffect !== 'none');
+                const isHighRarity = ['전설', '고대', '신화'].includes(char.rarity);
+                const creatorName = char.profile?.nickname || char.profile?.email?.split('@')[0] || 'Unknown';
+                const rank = rankSorted.findIndex(c => c.id === char.id) + 1;
+                
+                const card = document.createElement('div');
+                let rankClass = '';
+                if (rank === 1) rankClass = 'rank-1';
+                else if (rank === 2) rankClass = 'rank-2';
+                else if (rank === 3) rankClass = 'rank-3';
+
+                card.className = `pokedex-card rounded-lg shadow-md p-4 card-border-${char.rarity} ${isHighRarity ? `card-rarity-${char.rarity}` : ''} ${rankClass}`;
+                
+                card.innerHTML = `
+                    <div class="icon-container">
+                        ${hasStatusMove ? `<div class="status-icon" title="상태이상 기술 보유"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="text-purple-500"><path d="M11.25 3.25c.41 0 .75.34.75.75v1.5a.75.75 0 0 1-1.5 0v-1.5c0-.41.34-.75.75-.75zM11.25 18.5c.41 0 .75.34.75.75v1.5a.75.75 0 0 1-1.5 0v-1.5c0-.41.34-.75.75-.75zM5.5 11.25c0-.41.34-.75.75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75zM18.5 11.25c0-.41.34-.75.75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75zM7.693 7.693a.75.75 0 0 1 1.06 0l1.061 1.06a.75.75 0 1 1-1.06 1.06l-1.06-1.06a.75.75 0 0 1 0-1.06zM15.25 15.25a.75.75 0 0 1 1.06 0l1.061 1.06a.75.75 0 1 1-1.06 1.06l-1.06-1.06a.75.75 0 0 1 0-1.06zM7.693 16.307a.75.75 0 0 1 0-1.06l1.06-1.06a.75.75 0 0 1 1.06 1.06l-1.06 1.061a.75.75 0 0 1-1.06 0zM15.25 8.75a.75.75 0 0 1 0-1.06l1.06-1.06a.75.75 0 0 1 1.06 1.06l-1.06 1.061a.75.75 0 0 1-1.06 0z"></path></svg></div>` : ''}
+                        ${isHighRarity ? `<div class="rarity-star-icon" title="${char.rarity} 등급"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="text-yellow-400"><path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.007z" clip-rule="evenodd"></path></svg></div>` : ''}
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-4">
+                        <img src="${char.image_url}" alt="${char.name}" class="w-full sm:w-40 h-40 object-cover rounded-lg" onerror="this.onerror=null;this.src='https://placehold.co/160x160/e0e0e0/757575?text=Image+Not+Found';">
+                        <div class="flex-1">
+                            <h3 class="font-bold text-xl">${char.name} <span class="text-sm text-gray-500">(${char.classification})</span></h3>
+                            <div class="flex items-center gap-2 my-1"><span class="rarity-badge rarity-${char.rarity}">${char.rarity}</span><span class="universe-badge universe-${char.universe.replace(' ', '_')}">${char.universe}</span></div>
+                            <div class="flex gap-2 my-2">${char.types.map(t => `<span class="type-badge type-${t}">${typeTranslations[t] || t}</span>`).join('')}</div>
+                            <p class="text-sm text-gray-600">생성자: <a href="#" data-profile-id="${char.creator_id}" class="text-blue-600 hover:underline">${creatorName}</a></p>
+                        </div>
+                    </div>
+                    <div class="mt-4">
+                        <div class="text-xs font-bold text-gray-500 mb-1">능력치 (BST: ${bst})</div>
+                        ${Object.entries(char.stats).map(([stat, value]) => `<div class="flex items-center gap-2 text-xs mb-1"><span class="w-12 font-semibold text-gray-600">${{hp:'HP', attack:'공격', defense:'방어', sp_atk:'특공', sp_def:'특방', speed:'속도'}[stat]}</span><div class="flex-1 stat-bar-bg"><div class="stat-bar h-2 bg-blue-500" style="width: ${Math.min(100, (value / (stat === 'hp' ? 300 : 150)) * 100)}%;"></div></div><span class="w-8 text-right font-bold">${value}</span></div>`).join('')}
+                    </div>
+                    <div class="rank-display">#${rank > 0 ? rank : '??'}</div>
+                `;
+                card.onclick = () => navigateTo('detail-view', char.id);
+                card.querySelector('[data-profile-id]').onclick = (e) => { e.stopPropagation(); navigateTo('profile-view', e.target.dataset.profileId); };
+                pokedexContainer.appendChild(card);
+            });
+        }
+        
+        window.renderDetailView = async function(characterId) {
+            const currentId = Number(characterId);
+            detailViewContainer.dataset.id = currentId;
+            const char = allCharacters.find(c => c.id === currentId);
+            if (!char) { 
+                detailViewContainer.innerHTML = `<p class="text-center p-8">캐릭터를 찾을 수 없습니다. 메인으로 돌아가 다시 시도해주세요.</p>`; 
+                return; 
+            }
+
+            const { data: comments, error } = await supabaseClient.from('battle_comments').select('*, profile:battle_profiles(id, nickname, email)').eq('character_id', currentId).order('created_at', { ascending: false });
+            if (error) console.error("Error fetching comments:", error);
+
+            const bst = Object.values(char.stats).reduce((a, b) => a + b, 0);
+            const creatorName = char.profile?.nickname || char.profile?.email?.split('@')[0] || 'Unknown';
+            
+            const rankSorted = [...allCharacters].sort((a, b) => (b.rank_points || 1000) - (a.rank_points || 1000));
+            const rank = rankSorted.findIndex(c => c.id === char.id) + 1;
+            const badgeHTML = getRankBadge(rank);
+
+            detailViewContainer.innerHTML = `
+                <div class="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
+                    <div class="bg-white rounded-2xl shadow-xl overflow-hidden">
+                        <div class="p-6 md:p-8">
+                            <div class="flex flex-col md:flex-row gap-8">
+                                <div class="md:w-1/3 text-center">
+                                    <img src="${char.image_url}" alt="${char.name}" class="w-full h-auto object-cover rounded-lg shadow-lg mx-auto" onerror="this.onerror=null;this.src='https://placehold.co/256x256/e0e0e0/757575?text=Image+Not+Found';">
+                                    ${(currentUser?.id === char.creator_id || currentProfile?.is_admin) ? `<button id="delete-char-btn" class="mt-4 bg-red-500 text-white font-bold py-2 px-4 rounded-lg w-full">캐릭터 삭제</button>` : ''}
+                                </div>
+                                <div class="md:w-2/3">
+                                    <h2 class="font-title text-4xl">${char.name} <span class="text-2xl text-gray-500">(${char.classification})</span></h2>
+                                    <div class="flex items-center gap-2 my-2"><span class="rarity-badge rarity-${char.rarity}">${char.rarity}</span><span class="universe-badge universe-${char.universe.replace(' ', '_')}">${char.universe}</span></div>
+                                    <div class="flex gap-2 my-3">${char.types.map(t => `<span class="type-badge type-${t}">${typeTranslations[t] || t}</span>`).join('')}</div>
+                                    <p class="text-gray-700 my-4">${char.pokedexEntry}</p>
+                                    <p class="text-sm text-gray-600">생성자: <a href="#" onclick="event.preventDefault(); navigateTo('profile-view', '${char.creator_id}')" class="text-blue-600 hover:underline">${creatorName}</a></p>
+                                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mt-4">
+                                        <span><b>키:</b> ${char.height}m</span>
+                                        <span><b>몸무게:</b> ${char.weight}kg</span>
+                                        <span><b>특성:</b> ${char.ability}</span>
+                                        <span><b>숨겨진 특성:</b> ${char.hiddenAbility}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 p-6 md:p-8">
+                            <h3 class="font-bold text-xl mb-4">획득한 랭킹 뱃지</h3>
+                            <div>${badgeHTML}</div>
+                        </div>
+                        <div class="bg-white p-6 md:p-8">
+                            <h3 class="font-bold text-xl mb-4">능력치 (총합: ${bst})</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+                                ${Object.entries(char.stats).map(([stat, value]) => `<div class="flex items-center gap-2 text-sm"><span class="w-16 font-semibold text-gray-600">${{hp:'HP', attack:'공격', defense:'방어', sp_atk:'특공', sp_def:'특방', speed:'속도'}[stat]}</span><div class="flex-1 stat-bar-bg"><div class="stat-bar h-3 bg-blue-500" style="width: ${Math.min(100, (value / (stat === 'hp' ? 300 : 150)) * 100)}%;"></div></div><span class="w-8 text-right font-bold">${value}</span></div>`).join('')}
+                            </div>
+                        </div>
+                        <div class="bg-gray-50 p-6 md:p-8">
+                            <h3 class="font-bold text-xl mb-4">기술</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                ${char.moves.map(move => `<div class="p-4 rounded-lg bg-gray-100 border border-gray-200"><p class="font-bold">${move.name} <span class="type-badge type-${Object.keys(typeTranslations).find(key => typeTranslations[key] === move.type) || move.type}">${move.type}</span></p><p class="text-sm text-gray-600 mt-1">${move.description}</p><div class="text-xs mt-2 flex justify-between"><span>위력: ${move.power || '-'}</span><span>분류: ${move.category}</span>${move.statusEffect !== 'none' ? `<span>효과: ${move.statusEffect} (${move.statusChance*100}%)</span>` : ''}</div></div>`).join('')}
+                            </div>
+                        </div>
+                        <div class="bg-white p-6 md:p-8">
+                            <h3 class="font-bold text-xl mb-4">댓글</h3>
+                            ${currentUser ? `<form id="comment-form" class="flex gap-2 mb-6"><input id="comment-input" type="text" placeholder="댓글을 입력하세요..." class="flex-1 p-2 border rounded-lg" required><button type="submit" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">등록</button></form>` : '<p class="text-center text-gray-500">댓글을 작성하려면 <a href="#" onclick="event.preventDefault(); navigateTo(\'auth-view\')" class="text-blue-600 hover:underline">로그인</a>이 필요합니다.</p>'}
+                            <div id="comments-container" class="space-y-4">${comments && comments.length > 0 ? comments.map(c => `<div class="flex gap-3"><div class="flex-1 bg-white p-3 rounded-lg border"><p class="text-sm">${c.content}</p><div class="text-xs text-gray-500 mt-2"><span>작성자: ${c.profile?.nickname || c.profile?.email?.split('@')[0]}</span><span class="mx-2">|</span><span>${new Date(c.created_at).toLocaleString()}</span></div></div>${(currentUser?.id === c.user_id || currentProfile?.is_admin) ? `<button data-comment-id="${c.id}" class="delete-comment-btn self-start text-red-500 hover:text-red-700">&times;</button>` : ''}</div>`).join('') : '<p class="text-center text-gray-400">아직 댓글이 없습니다.</p>'}</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            if (currentUser?.id === char.creator_id || currentProfile?.is_admin) {
+                document.getElementById('delete-char-btn').onclick = () => {
+                    showModal('캐릭터 삭제 확인', `<p><strong>${char.name}</strong>을(를) 정말로 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.</p>`, async () => {
+                        const { error } = await supabaseClient.from('battle_characters').delete().eq('id', char.id);
+                        if (error) { showModal('삭제 오류', `<p>${error.message}</p>`); }
+                        else { navigateTo('pokedex-view'); }
+                    });
+                };
+            }
+
+            if (currentUser) {
+                document.getElementById('comment-form').onsubmit = async (e) => {
+                    e.preventDefault();
+                    const content = document.getElementById('comment-input').value;
+                    if (!content.trim()) return;
+                    const { error } = await supabaseClient.from('battle_comments').insert({ character_id: char.id, user_id: currentUser.id, content });
+                    if (error) { showModal('댓글 등록 오류', `<p>${error.message}</p>`); }
+                    else { renderDetailView(characterId); }
+                };
+            }
+            
+            document.querySelectorAll('.delete-comment-btn').forEach(btn => {
+                btn.onclick = () => {
+                    showModal('댓글 삭제 확인', '<p>정말로 이 댓글을 삭제하시겠습니까?</p>', async () => {
+                        const { error } = await supabaseClient.from('battle_comments').delete().eq('id', btn.dataset.commentId);
+                        if (error) { showModal('삭제 오류', `<p>${error.message}</p>`); }
+                        else { renderDetailView(characterId); }
+                    });
+                };
+            });
+        };
+
+        window.renderBattleSelectionView = function() {
+            if (!currentUser) { navigateTo('auth-view'); return; }
+            const myCharacters = allCharacters.filter(c => c.creator_id === currentUser.id);
+
+            if (myCharacters.length === 0) {
+                battleSelectionViewContainer.innerHTML = `<div class="text-center p-8 max-w-lg mx-auto bg-white rounded-lg shadow-md mt-10"><h2 class="text-2xl font-bold mb-4">캐릭터 없음</h2><p>배틀을 하려면 먼저 자신의 캐릭터를 생성해야 합니다.</p><button onclick="navigateTo('pokedex-view')" class="mt-4 bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">생성하러 가기</button></div>`;
+                return;
+            }
+
+            let selectionHTML = `<div class="max-w-4xl mx-auto p-4"><h2 class="font-title text-3xl text-center mb-6">내보낼 캐릭터 선택</h2><div id="player-char-list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div></div>`;
+            battleSelectionViewContainer.innerHTML = selectionHTML;
+
+            const playerListContainer = document.getElementById('player-char-list');
+            myCharacters.forEach(char => {
+                const card = document.createElement('div');
+                card.className = 'pokedex-card rounded-lg shadow p-4';
+                card.innerHTML = `<h3 class="font-bold text-lg">${char.name}</h3><img src="${char.image_url}" class="w-full h-32 object-cover rounded-md my-2"><p>랭크: ${char.rank_points || 1000}</p>`;
+                card.onclick = () => selectOpponent(char.id);
+                playerListContainer.appendChild(card);
+            });
+
+            function selectOpponent(playerCharId) {
+                const opponents = allCharacters.filter(c => c.id !== playerCharId);
+                
+                if (opponents.length === 0) {
+                    battleSelectionViewContainer.innerHTML = `<div class="text-center p-8 max-w-lg mx-auto bg-white rounded-lg shadow-md mt-10"><h2 class="text-2xl font-bold mb-4">상대 없음</h2><p>배틀할 다른 캐릭터가 없습니다. 새로운 캐릭터가 생성될 때까지 기다려주세요.</p><button onclick="navigateTo('pokedex-view')" class="mt-4 bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">메인으로 돌아가기</button></div>`;
+                    return;
+                }
+
+                let opponentHTML = `<div class="max-w-5xl mx-auto p-4"><h2 class="font-title text-3xl text-center mb-6">상대할 캐릭터 선택</h2><div id="opponent-char-list" class="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-4 gap-4"></div></div>`;
+                battleSelectionViewContainer.innerHTML = opponentHTML;
+                const opponentListContainer = document.getElementById('opponent-char-list');
+                opponents.forEach(char => {
+                    const card = document.createElement('div');
+                    card.className = 'pokedex-card rounded-lg shadow p-3';
+                    card.innerHTML = `<h3 class="font-bold text-md">${char.name}</h3><img src="${char.image_url}" class="w-full h-24 object-cover rounded-md my-2"><p class="text-sm">랭크: ${char.rank_points || 1000}</p>`;
+                    card.onclick = () => navigateTo('battle-arena-view', playerCharId, char.id);
+                    opponentListContainer.appendChild(card);
+                });
+            }
+        };
+
+        window.renderBattleArenaView = function(playerCharId, opponentCharId) {
+            if (!playerCharId || !opponentCharId) {
+                console.error("Battle Arena render called without character IDs.");
+                navigateTo('pokedex-view');
+                showModal('오류', '<p>배틀을 시작하는 중 오류가 발생했습니다. 다시 시도해주세요.</p>');
+                return;
+            }
+
+            const playerChar = JSON.parse(JSON.stringify(allCharacters.find(c => c.id === Number(playerCharId))));
+            const opponentChar = JSON.parse(JSON.stringify(allCharacters.find(c => c.id === Number(opponentCharId))));
+
+            if (!playerChar || !opponentChar) {
+                console.error("Could not find one or both characters for battle.", { playerCharId, opponentCharId });
+                navigateTo('pokedex-view');
+                showModal('오류', '<p>배틀 상대를 찾을 수 없습니다. 다시 시도해주세요.</p>');
+                return;
+            }
+            
+            const randomBg = battleBackgrounds[Math.floor(Math.random() * battleBackgrounds.length)];
+            battleArenaContainer.style.background = `url('${randomBg}') center/cover`;
+
+            battleArenaContainer.innerHTML = `
+                <div class="flex flex-col justify-between h-full p-4 text-white">
+                    <!-- Opponent -->
+                    <div class="flex justify-end items-center gap-4">
+                        <div class="bg-gray-800/70 p-3 rounded-lg w-64 text-right">
+                            <p class="font-bold">${opponentChar.name}</p>
+                            <div class="w-full bg-gray-600 rounded-full h-4 mt-1"><div id="opponent-hp-bar" class="bg-green-500 h-4 rounded-full" style="width: 100%"></div></div>
+                            <p id="opponent-hp-text" class="text-sm mt-1">${opponentChar.stats.hp} / ${opponentChar.stats.hp}</p>
+                        </div>
+                        <div class="battle-character-container">
+                            <img id="opponent-img" src="${opponentChar.image_url}" class="w-32 h-32 battle-character-img">
+                            <div id="opponent-status-badge"></div>
+                        </div>
+                    </div>
+                    <!-- Player -->
+                    <div class="flex justify-start items-center gap-4">
+                        <div class="battle-character-container">
+                            <img id="player-img" src="${playerChar.image_url}" class="w-32 h-32 battle-character-img">
+                             <div id="player-status-badge"></div>
+                        </div>
+                         <div class="bg-gray-800/70 p-3 rounded-lg w-64">
+                            <p class="font-bold">${playerChar.name}</p>
+                            <div class="w-full bg-gray-600 rounded-full h-4 mt-1"><div id="player-hp-bar" class="bg-green-500 h-4 rounded-full" style="width: 100%"></div></div>
+                            <p id="player-hp-text" class="text-sm mt-1">${playerChar.stats.hp} / ${playerChar.stats.hp}</p>
+                        </div>
+                    </div>
+                </div>
+                <div id="battle-log" class="absolute bottom-0 left-0 right-0 bg-black/50 p-4 overflow-y-auto text-sm"></div>
+            `;
+            
+            const battleLog = document.getElementById('battle-log');
+            let playerCurrentHP = playerChar.stats.hp;
+            let opponentCurrentHP = opponentChar.stats.hp;
+            let playerStatus = null, opponentStatus = null;
+            let turn = 1;
+
+            function log(message) {
+                battleLog.innerHTML += `<p>${message}</p>`;
+                battleLog.scrollTop = battleLog.scrollHeight;
+            }
+
+            async function battleLoop() {
+                if (playerCurrentHP <= 0 || opponentCurrentHP <= 0) {
+                    const winner = playerCurrentHP > 0 ? playerChar : opponentChar;
+                    const loser = playerCurrentHP <= 0 ? playerChar : opponentChar;
+                    log(`<span class="log-win">🎉 ${winner.name}의 승리!</span>`);
+                    playVictorySound();
+                    const { rankChange, newWinnerRank, newLoserRank } = await updateRankings(winner, loser);
+                    const winnerModalContent = `
+                        <div class="text-center">
+                            <h2 class="text-5xl font-bold text-yellow-400" style="text-shadow: 2px 2px #000;">WINNER</h2>
+                            <img src="${winner.image_url}" class="w-40 h-40 rounded-full object-cover mx-auto my-4 border-4 border-yellow-400 shadow-lg">
+                            <p class="text-2xl font-bold">${winner.name}!</p>
+                            <div class="mt-4 text-gray-700">
+                                <p>${winner.name}: ${winner.rank_points || 1000} -> <span class="text-green-500 font-bold">${newWinnerRank} (+${rankChange})</span></p>
+                                <p>${loser.name}: ${loser.rank_points || 1000} -> <span class="text-red-500 font-bold">${newLoserRank} (${newLoserRank - (loser.rank_points || 1000)})</span></p>
+                            </div>
+                            <button onclick="closeModal(); navigateTo('pokedex-view')" class="mt-6 w-full bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">메인으로</button>
+                        </div>
+                    `;
+                    showModal('배틀 종료!', winnerModalContent);
+                    return;
+                }
+
+                log(`<hr class="my-1 border-gray-500"><p class="log-turn">--- ${turn}턴 ---</p>`);
+                
+                const firstAttacker = playerChar.stats.speed >= opponentChar.stats.speed ? 'player' : 'opponent';
+                await processTurn(firstAttacker);
+                if (playerCurrentHP > 0 && opponentCurrentHP > 0) {
+                    await processTurn(firstAttacker === 'player' ? 'opponent' : 'player');
+                }
+                
+                turn++;
+                if (playerCurrentHP > 0 && opponentCurrentHP > 0) setTimeout(battleLoop, 2500);
+                else setTimeout(battleLoop, 1000);
+            }
+
+            async function processTurn(attackerType) {
+                return new Promise(async (resolve) => {
+                    const [attacker, defender] = attackerType === 'player' ? [playerChar, opponentChar] : [opponentChar, playerChar];
+                    let [attackerCurrentHP, defenderCurrentHP] = attackerType === 'player' ? [playerCurrentHP, opponentCurrentHP] : [opponentCurrentHP, playerCurrentHP];
+                    let [attackerStatus, defenderStatus] = attackerType === 'player' ? [playerStatus, opponentStatus] : [opponentStatus, playerStatus];
+                    const attackerImg = document.getElementById(`${attackerType}-img`);
+                    const defenderImg = document.getElementById(attackerType === 'player' ? 'opponent-img' : 'player-img');
+                    const defenderContainer = defenderImg.parentElement;
+
+                    if (attackerStatus) {
+                        if (attackerStatus.type === 'sleep') {
+                            if (Math.random() < 0.5) {
+                                log(`<span class="log-status-sleep">${attacker.name}은(는) 깊은 잠에 빠져있다...</span>`);
+                                return resolve();
+                            } else {
+                                log(`<span class="log-status-sleep">${attacker.name}이(가) 잠에서 깨어났다!</span>`);
+                                if (attackerType === 'player') playerStatus = null; else opponentStatus = null;
+                                attackerImg.classList.remove('status-sleep');
+                                document.getElementById(`${attackerType}-status-badge`).innerHTML = '';
+                            }
+                        }
+                        if (attackerStatus.type === 'paralysis' && Math.random() < 0.25) {
+                            log(`<span class="log-status-paralysis">${attacker.name}은(는) 몸이 저려 움직일 수 없다!</span>`);
+                            return resolve();
+                        }
+                    }
+
+                    const isDesperate = attackerCurrentHP / attacker.stats.hp <= 0.25;
+                    if (isDesperate) log(`<span class="log-desperate">${attacker.name}의 궁지(Desperate) 상태 발동!</span>`);
+                    
+                    const move = attacker.moves[Math.floor(Math.random() * attacker.moves.length)];
+                    log(`${attacker.name}의 ${move.name} 공격!`);
+                    attackerImg.classList.add('attack-animation');
+                    playHitSound();
+                    await new Promise(r => setTimeout(r, 500));
+
+                    defenderImg.classList.add('get-hit-animation');
+                    const { damage, isCritical, effectiveness } = calculateDamage(attacker, defender, move, isDesperate);
+                    
+                    if (damage > 0) {
+                        const damageIndicator = document.createElement('div');
+                        damageIndicator.className = 'damage-indicator';
+                        damageIndicator.textContent = `-${damage}`;
+                        defenderContainer.appendChild(damageIndicator);
+                        setTimeout(() => damageIndicator.remove(), 1200);
+                    }
+
+                    defenderCurrentHP = Math.max(0, defenderCurrentHP - damage);
+
+                    if (attackerType === 'player') opponentCurrentHP = defenderCurrentHP; else playerCurrentHP = defenderCurrentHP;
+                    updateHPBars();
+                    
+                    let damageLog = `<span class="log-damage">${damage}의 데미지를 입혔다.</span>`;
+                    if (isCritical) { 
+                        damageLog += ` <span class="log-crit">급소에 맞았다!</span>`; 
+                        playCritSound();
+                        showBattleEffect('CRITICAL HIT!', 'crit');
+                    }
+                    if (effectiveness > 1) { 
+                        damageLog += ` <span class="log-super-effective">효과가 굉장했다!</span>`; 
+                        playSuperEffectiveSound();
+                        showBattleEffect('SUPER EFFECTIVE!', 'super-effective');
+                    }
+                    if (effectiveness < 1 && effectiveness > 0) damageLog += ` <span class="log-not-effective">효과가 별로인 듯하다...</span>`;
+                    if (effectiveness === 0) damageLog += ` <span class="log-no-effect">효과가 없는 것 같다...</span>`;
+                    log(damageLog);
+                    
+                    if (move.statusEffect !== 'none' && !defenderStatus && Math.random() < move.statusChance) {
+                        const statusText = {'poison':'맹독', 'paralysis':'마비', 'sleep':'수면'}[move.statusEffect];
+                        log(`<span class="log-status-${move.statusEffect}">${defender.name}은(는) ${statusText} 상태가 되었다!</span>`);
+                        const newStatus = { type: move.statusEffect, text: statusText };
+                        if (attackerType === 'player') opponentStatus = newStatus; else playerStatus = newStatus;
+                        defenderImg.classList.add(`status-${move.statusEffect}`);
+                        const statusBadgeContainer = document.getElementById(attackerType === 'player' ? 'opponent-status-badge' : 'player-status-badge');
+                        statusBadgeContainer.innerHTML = `<span class="battle-status-badge" style="background-color: ${{'poison':'#A33EA1', 'paralysis':'#F7D02C', 'sleep':'#A8A77A'}[move.statusEffect]}">${statusText}</span>`;
+                    }
+                    
+                    await new Promise(r => setTimeout(r, 1000));
+                    attackerImg.classList.remove('attack-animation');
+                    defenderImg.classList.remove('get-hit-animation');
+                    
+                    if (attackerStatus?.type === 'poison') {
+                        const poisonDamage = Math.floor(attacker.stats.hp / 8);
+                        attackerCurrentHP = Math.max(0, attackerCurrentHP - poisonDamage);
+                        if (attackerType === 'player') playerCurrentHP = attackerCurrentHP; else opponentCurrentHP = attackerCurrentHP;
+                        updateHPBars();
+                        log(`<span class="log-status-poison">${attacker.name}은(는) 독 데미지로 ${poisonDamage}의 피해를 입었다.</span>`);
+                    }
+
+                    setTimeout(resolve, 500);
+                });
+            }
+
+            function updateHPBars() {
+                const playerHPRatio = playerCurrentHP / playerChar.stats.hp;
+                const opponentHPRatio = opponentCurrentHP / opponentChar.stats.hp;
+                const playerHPBar = document.getElementById('player-hp-bar');
+                const opponentHPBar = document.getElementById('opponent-hp-bar');
+                if(playerHPBar) {
+                    playerHPBar.style.width = `${playerHPRatio * 100}%`;
+                    playerHPBar.style.backgroundColor = playerHPRatio > 0.5 ? '#22c55e' : playerHPRatio > 0.2 ? '#facc15' : '#ef4444';
+                    document.getElementById('player-hp-text').textContent = `${Math.ceil(playerCurrentHP)} / ${playerChar.stats.hp}`;
+                }
+                if(opponentHPBar) {
+                    opponentHPBar.style.width = `${opponentHPRatio * 100}%`;
+                    opponentHPBar.style.backgroundColor = opponentHPRatio > 0.5 ? '#22c55e' : opponentHPRatio > 0.2 ? '#facc15' : '#ef4444';
+                    document.getElementById('opponent-hp-text').textContent = `${Math.ceil(opponentCurrentHP)} / ${opponentChar.stats.hp}`;
+                }
+            }
+            setTimeout(battleLoop, 1000);
+        };
+        
+        window.renderRankingView = function() {
+            const sorted = [...allCharacters].sort((a, b) => (b.rank_points || 1000) - (a.rank_points || 1000));
+            rankingViewContainer.innerHTML = `
+                <div class="max-w-4xl mx-auto p-4">
+                    <h2 class="font-title text-4xl text-center mb-8">전체 랭킹</h2>
+                    <div class="bg-white rounded-lg shadow-lg">
+                        <ul id="ranking-list" class="divide-y divide-gray-200">
+                            ${sorted.map((char, index) => `
+                                <li class="p-4 flex items-center justify-between hover:bg-gray-50 cursor-pointer" onclick="navigateTo('detail-view', ${char.id})">
+                                    <div class="flex items-center gap-4">
+                                        <span class="text-lg font-bold w-8 text-center">${index + 1}</span>
+                                        <img src="${char.image_url}" class="w-12 h-12 rounded-full object-cover">
+                                        <div>
+                                            <p class="font-bold">${char.name}</p>
+                                            <p class="text-sm text-gray-500">${char.rarity} / by ${char.profile?.nickname || char.profile?.email?.split('@')[0]}</p>
+                                        </div>
+                                    </div>
+                                    <div class="font-bold text-lg text-yellow-600">${char.rank_points || 1000} RP</div>
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                </div>
+            `;
+        };
+
+        window.renderProfileView = async function(profileId) {
+            const profile = allProfiles.find(p => p.id === profileId);
+            if (!profile) { profileViewContainer.innerHTML = `<p class="text-center p-8">프로필을 찾을 수 없습니다.</p>`; return; }
+            
+            const userCharacters = allCharacters.filter(c => c.creator_id === profileId).sort((a, b) => (b.rank_points || 1000) - (a.rank_points || 1000));
+            const isMyProfile = currentUser?.id === profileId;
+
+            profileViewContainer.innerHTML = `
+                <div class="max-w-4xl mx-auto p-4">
+                    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+                        <h2 class="text-2xl font-bold">프로필 정보</h2>
+                        <div class="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div><span class="font-semibold">이메일:</span> ${profile.email}</div>
+                            <div class="flex items-center gap-2"><span class="font-semibold">닉네임:</span> <span id="nickname-display">${profile.nickname || '미설정'}</span> ${isMyProfile ? `<button id="edit-nickname-btn" class="text-sm text-blue-500">변경</button>` : ''}</div>
+                            <div id="nickname-edit-form" class="hidden"><input type="text" id="nickname-input" value="${profile.nickname || ''}" class="p-1 border rounded"><button id="save-nickname-btn" class="ml-2 bg-green-500 text-white px-2 py-1 rounded">저장</button></div>
+                            <div><span class="font-semibold">보유 크레딧:</span> ${isMyProfile ? currentProfile.credits : '비공개'}</div>
+                            ${isMyProfile ? `<button id="check-in-btn" class="bg-green-500 text-white font-bold py-2 px-4 rounded-lg w-full md:w-auto">출석 체크 (1 크레딧 획득)</button>` : ''}
+                        </div>
+                    </div>
+                    <h2 class="text-2xl font-bold mb-4">생성한 캐릭터 목록 (${userCharacters.length}개)</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                        ${userCharacters.length > 0 ? userCharacters.map(char => `<div class="pokedex-card p-4" onclick="navigateTo('detail-view', ${char.id})"><h3 class="font-bold">${char.name}</h3><img src="${char.image_url}" class="w-full h-32 object-cover rounded my-2"><p>랭킹: #${allCharacters.sort((a,b) => (b.rank_points||1000)-(a.rank_points||1000)).findIndex(c=>c.id===char.id)+1} (${char.rank_points || 1000} RP)</p></div>`).join('') : '<p>아직 생성한 캐릭터가 없습니다.</p>'}
+                    </div>
+                </div>
+            `;
+
+            if (isMyProfile) {
+                document.getElementById('edit-nickname-btn').onclick = () => {
+                    document.getElementById('nickname-display').classList.add('hidden');
+                    document.getElementById('edit-nickname-btn').classList.add('hidden');
+                    document.getElementById('nickname-edit-form').classList.remove('hidden');
+                };
+                document.getElementById('save-nickname-btn').onclick = async () => {
+                    const newNickname = document.getElementById('nickname-input').value.trim();
+                    if (newNickname) {
+                        const { error } = await supabaseClient.from('battle_profiles').update({ nickname: newNickname }).eq('id', currentUser.id);
+                        if (error) { showModal('오류', `<p>닉네임 변경 실패: ${error.message}</p>`); }
+                        else {
+                            document.getElementById('nickname-display').textContent = newNickname;
+                            document.getElementById('nickname-display').classList.remove('hidden');
+                            document.getElementById('edit-nickname-btn').classList.remove('hidden');
+                            document.getElementById('nickname-edit-form').classList.add('hidden');
+                        }
+                    }
+                };
+                document.getElementById('check-in-btn').onclick = async () => {
+                    const today = new Date().toISOString().split('T')[0];
+                    if (currentProfile.last_check_in === today) {
+                        showModal('출석 체크', '<p>오늘은 이미 출석했습니다.</p>');
+                        return;
+                    }
+                    if(currentProfile.credits >= 5) {
+                        showModal('크레딧 최대', '<p>무료 크레딧은 최대 5개까지 보유할 수 있습니다.</p>');
+                        return;
+                    }
+                    const newCredits = currentProfile.credits + 1;
+                    const { error } = await supabaseClient.from('battle_profiles').update({ credits: newCredits, last_check_in: today }).eq('id', currentUser.id);
+                    if (error) { showModal('오류', `<p>출석 체크 실패: ${error.message}</p>`); }
+                    else { showModal('출석 완료!', '<p>1 크레딧을 획득했습니다!</p>'); }
+                };
+            }
+        };
+
+        window.renderAdminView = function() {
+            if (!currentProfile?.is_admin) { navigateTo('pokedex-view'); return; }
+            adminViewContainer.innerHTML = `
+                <div class="max-w-4xl mx-auto p-4">
+                    <h2 class="font-title text-4xl text-center mb-8">관리자 페이지</h2>
+                    <div class="bg-white rounded-lg shadow-lg p-6">
+                        <h3 class="font-bold text-xl mb-4">사용자 목록</h3>
+                        <div class="divide-y divide-gray-200">
+                            ${allProfiles.map(p => `
+                                <div class="py-3 flex justify-between items-center">
+                                    <div><p class="font-semibold">${p.nickname || '미설정'}</p><p class="text-sm text-gray-600">${p.email}</p></div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-20">크레딧: ${p.credits}</span>
+                                        <input type="number" id="credit-input-${p.id}" class="w-20 p-1 border rounded" value="${p.credits}">
+                                        <button data-id="${p.id}" class="save-credit-btn bg-blue-500 text-white px-3 py-1 rounded">저장</button>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+            document.querySelectorAll('.save-credit-btn').forEach(btn => {
+                btn.onclick = async () => {
+                    const userId = btn.dataset.id;
+                    const newCredits = document.getElementById(`credit-input-${userId}`).value;
+                    const { error } = await supabaseClient.from('battle_profiles').update({ credits: parseInt(newCredits) }).eq('id', userId);
+                    if (error) { showModal('오류', `<p>크레딧 수정 실패: ${error.message}</p>`); }
+                    else { showModal('성공', '<p>크레딧이 성공적으로 수정되었습니다.</p>'); }
+                };
+            });
+        };
+        
+        window.renderRankingPodium = function() {
+            const sorted = [...allCharacters].sort((a, b) => (b.rank_points || 1000) - (a.rank_points || 1000));
+            const top3 = sorted.slice(0, 3);
+            rankingPodiumView.innerHTML = top3.map((char, index) => {
+                const creatorName = char.profile?.nickname || char.profile?.email?.split('@')[0] || 'Unknown';
+                return `
+                <div class="podium-item podium-${index + 1}">
+                    <p class="text-2xl font-bold mb-2">${index === 0 ? '🥇' : index === 1 ? '🥈' : '🥉'}</p>
+                    <img src="${char.image_url}" class="podium-img" onclick="navigateTo('detail-view', ${char.id})">
+                    <div class="podium-base flex flex-col justify-center items-center p-2">
+                        <p class="text-lg font-bold">${char.name}</p>
+                        <p class="text-sm">${char.rank_points || 1000} RP</p>
+                        <p class="text-xs mt-1">by <a href="#" onclick="event.stopPropagation(); navigateTo('profile-view', '${char.creator_id}')" class="hover:underline">${creatorName}</a></p>
+                    </div>
+                </div>
+            `}).join('');
+            if (top3.length === 0) {
+                rankingPodiumView.innerHTML = `<p class="text-center text-gray-500 col-span-full">아직 랭킹 데이터가 없습니다.</p>`;
+            }
+        };
+
+        function getRankBadge(rank) {
+            if (!rank || rank > 100) return '<div class="rank-badge badge-wood"><span>전적 없음</span></div>';
+            if (rank <= 3) return '<div class="rank-badge badge-gold"><span>🏆 Top 3</span></div>';
+            if (rank <= 10) return '<div class="rank-badge badge-silver"><span>🥈 Top 10</span></div>';
+            if (rank <= 20) return '<div class="rank-badge badge-bronze"><span>🥉 Top 20</span></div>';
+            if (rank <= 30) return '<div class="rank-badge badge-iron"><span>Top 30</span></div>';
+            if (rank <= 50) return '<div class="rank-badge badge-stone"><span>Top 50</span></div>';
+            if (rank <= 100) return '<div class="rank-badge badge-wood"><span>Top 100</span></div>';
+            return '<div class="rank-badge badge-wood"><span>전적 없음</span></div>';
+        }
+        
+        function showBattleEffect(text, type) {
+            const effect = document.createElement('div');
+            effect.className = `impact-text ${type}`;
+            effect.textContent = text;
+            battleEffectsContainer.appendChild(effect);
+            
+            battleArenaContainer.classList.add('screen-shake');
+
+            setTimeout(() => {
+                effect.remove();
+                battleArenaContainer.classList.remove('screen-shake');
+            }, 1000);
+        }
+
+        // --- Initial Load & Event Listeners ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            const { data: { session } } = await supabaseClient.auth.getSession();
+            currentUser = session?.user || null;
+            await initialDataLoad();
+            listenToAuthStateChanges();
+            subscribeToChanges();
+            document.body.addEventListener('click', setupAudio, { once: true });
+        });
+        
+        homeBtn.addEventListener('click', () => navigateTo('pokedex-view'));
+        generateBtn.addEventListener('click', generateCharacter);
+        promptInput.addEventListener('keydown', e => e.key === 'Enter' && generateCharacter());
+        goToBattleBtn.addEventListener('click', () => navigateTo('battle-selection-view'));
+        goToRankingBtn.addEventListener('click', () => navigateTo('ranking-view'));
+        showTypeChartBtn.addEventListener('click', showTypeChartModal);
+        showRarityTableBtn.addEventListener('click', showRarityModal);
+        loginForm.addEventListener('submit', handleLogin);
+        signupForm.addEventListener('submit', handleSignup);
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                playUiClickSound();
+                const tab = btn.dataset.tab;
+                document.querySelectorAll('.auth-form').forEach(form => form.classList.add('hidden'));
+                document.getElementById(`${tab}-form`).classList.remove('hidden');
+                tabBtns.forEach(b => b.classList.remove('border-blue-500', 'text-blue-600'));
+                btn.classList.add('border-blue-500', 'text-blue-600');
+            });
+        });
+        tabBtns[0].click();
+        filterBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                playUiClickSound();
+                filterBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                activeFilter = btn.dataset.filter;
+                renderPokedexView();
+            });
+        });
+    </script>
 </body>
 </html>
