@@ -26,10 +26,10 @@
         .pokedex-card:hover { transform: translateY(-5px) scale(1.02); box-shadow: 0 10px 20px rgba(0,0,0,0.1); }
         .stat-bar-bg { background-color: #e9ecef; border-radius: 999px; }
         .stat-bar { transition: width 0.8s ease-out; border-radius: 999px; }
-        .rank-display { position: absolute; bottom: 8px; right: 8px; background-color: rgba(0,0,0,0.6); color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: bold; }
+        .rank-display { position: absolute; bottom: 8px; right: 8px; background-color: rgba(0,0,0,0.7); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; }
 
         /* Type & Universe Badges */
-        .type-badge { padding: 4px 12px; border-radius: 12px; font-weight: 700; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.3); }
+        .type-badge { padding: 4px 12px; border-radius: 12px; font-weight: 700; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
         .type-Normal { background-color: #A8A77A; } .type-Fire { background-color: #EE8130; }
         .type-Water { background-color: #6390F0; } .type-Electric { background-color: #F7D02C; }
         .type-Grass { background-color: #7AC74C; } .type-Ice { background-color: #96D9D6; }
@@ -41,12 +41,12 @@
         .type-Steel { background-color: #B7B7CE; } .type-Fairy { background-color: #D685AD; }
         .type-Light { background: linear-gradient(45deg, #FFFDE4, #F9E79F); color: #B48A00; text-shadow: 0 0 2px white; }
 
-        .universe-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 8px; font-weight: bold; }
+        .universe-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 8px; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
         .universe-pokemon { background-color: #ffcb05; color: #2e5da8; }
         .universe-haunted_house { background-color: #4b0082; color: #e0e0e0; }
 
         /* Rarity Styles */
-        .rarity-badge { padding: 4px 12px; border-radius: 12px; font-weight: 900; color: white; }
+        .rarity-badge { padding: 4px 12px; border-radius: 12px; font-weight: 900; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
         .rarity-일반 { background-color: #B0BEC5; } .rarity-희귀 { background-color: #42A5F5; }
         .rarity-에픽 { background-color: #AB47BC; } .rarity-전설 { background: linear-gradient(45deg, #FFEE58, #F57F17); text-shadow: 0 0 2px black; }
         .rarity-고대 { background: linear-gradient(45deg, #4DB6AC, #004D40); text-shadow: 0 0 2px black; }
@@ -471,7 +471,17 @@
                     allCharacters.push({ ...newRecord.data, id: newRecord.id, created_at: newRecord.created_at, creator_id: newRecord.creator_id, rank_points: newRecord.rank_points, image_url: newRecord.image_url, profile: allProfiles.find(p => p.id === newRecord.creator_id) });
                 } else if (eventType === 'UPDATE') {
                     const index = allCharacters.findIndex(c => c.id === id);
-                    if (index > -1) allCharacters[index] = { ...allCharacters[index], ...allCharacters[index].data, ...newRecord.data, rank_points: newRecord.rank_points };
+                    if (index > -1) {
+                        // Safely merge properties from the new record
+                        const updatedCharacter = { ...allCharacters[index], ...newRecord };
+                        // If the new record has a non-null data property, spread it to overwrite top-level fields
+                        if (newRecord.data) {
+                            Object.assign(updatedCharacter, newRecord.data);
+                        }
+                        // The 'data' property from the newRecord is not needed at the top level
+                        delete updatedCharacter.data;
+                        allCharacters[index] = updatedCharacter;
+                    }
                 } else if (eventType === 'DELETE') {
                     allCharacters = allCharacters.filter(c => c.id !== id);
                 }
@@ -739,6 +749,11 @@ JSON 스키마에 맞춰 답변해주세요.
             const rankSorted = [...allCharacters].sort((a, b) => (b.rank_points || 1000) - (a.rank_points || 1000));
 
             filtered.forEach((char) => {
+                // FIX: Add a guard clause to prevent error if char.stats is missing.
+                if (!char.stats) {
+                    console.warn("Character missing stats, skipping render:", char);
+                    return;
+                }
                 const bst = Object.values(char.stats).reduce((a, b) => a + b, 0);
                 const hasStatusMove = char.moves.some(m => m.statusEffect !== 'none');
                 const isHighRarity = ['전설', '고대', '신화'].includes(char.rarity);
@@ -943,7 +958,7 @@ JSON 스키마에 맞춰 답변해주세요.
             battleArenaContainer.style.background = `url('${randomBg}') center/cover`;
 
             battleArenaContainer.innerHTML = `
-                <div class="flex flex-col justify-around min-h-screen p-4 pb-40 text-white">
+                <div class="flex flex-col justify-between min-h-screen p-4 pb-40 text-white">
                     <!-- Opponent -->
                     <div class="flex justify-end items-center gap-4">
                         <div class="bg-gray-800/70 p-3 rounded-lg w-64 text-right">
