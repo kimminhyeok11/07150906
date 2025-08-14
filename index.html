@@ -88,7 +88,7 @@
         @keyframes get-hit-animation { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-10px); } 75% { transform: translateX(10px); } }
         .get-hit-animation { animation: get-hit-animation 0.4s; }
         .hp-bar-inner { transition: width 0.5s ease-in-out; }
-        #battle-log { height: 150px; backdrop-filter: blur(5px); }
+        #battle-log { height: 200px; backdrop-filter: blur(5px); }
         .log-damage { color: #ffdddd; } .log-crit { color: #fffa65; font-weight: bold; }
         .log-super-effective { color: #a3ffb4; font-weight: bold; }
         .log-not-effective { color: #d1d1d1; } .log-no-effect { color: #999999; }
@@ -102,7 +102,7 @@
         @keyframes floatUp { from { transform: translate(-50%, -50%) scale(1); opacity: 1; } to { transform: translate(-50%, -200%) scale(1.8); opacity: 0; } }
         .battle-status-badge { position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%); padding: 2px 8px; border-radius: 8px; font-size: 0.75rem; font-weight: bold; color: white; text-shadow: 1px 1px 1px black; }
         #battle-effects-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5000; }
-        .impact-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: 'Black Han Sans', sans-serif; font-size: 5rem; text-shadow: 3px 3px 5px rgba(0,0,0,0.5); animation: impact-pop 1s ease-out forwards; }
+        .impact-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: 'Black Han Sans', sans-serif; text-shadow: 3px 3px 5px rgba(0,0,0,0.5); animation: impact-pop 1s ease-out forwards; }
         .impact-text.crit { color: #fffa65; }
         .impact-text.super-effective { color: #a3ffb4; }
         @keyframes impact-pop { 0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; } 20% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; } 80% { transform: translate(-50%, -50%) scale(1); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 0; } }
@@ -943,7 +943,7 @@ JSON 스키마에 맞춰 답변해주세요.
             battleArenaContainer.style.background = `url('${randomBg}') center/cover`;
 
             battleArenaContainer.innerHTML = `
-                <div class="flex flex-col justify-between h-full p-4 text-white">
+                <div class="flex flex-col justify-between min-h-screen p-4 pb-52 text-white">
                     <!-- Opponent -->
                     <div class="flex justify-end items-center gap-4">
                         <div class="bg-gray-800/70 p-3 rounded-lg w-64 text-right">
@@ -1287,7 +1287,7 @@ JSON 스키마에 맞춰 답변해주세요.
         
         function showBattleEffect(text, type) {
             const effect = document.createElement('div');
-            effect.className = `impact-text ${type}`;
+            effect.className = `impact-text ${type} text-5xl sm:text-7xl lg:text-8xl`;
             effect.textContent = text;
             battleEffectsContainer.appendChild(effect);
             
