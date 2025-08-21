@@ -47,6 +47,13 @@
             position: relative;
             z-index: 1;
         }
+        /* Mobile background fix */
+        @media (max-width: 768px) {
+            #pokedex-view-background {
+                height: 60vh;
+            }
+        }
+
 
         /* Card Styles */
         .pokedex-card { background: #393939; border-left-width: 8px; transition: all 0.3s ease-in-out; cursor: pointer; position: relative; overflow: hidden; border-color: #515151; }
@@ -163,6 +170,7 @@
 
         /* General UI Components */
         .loader { border: 8px solid #f3f3f3; border-radius: 50%; border-top: 8px solid #3498db; width: 60px; height: 60px; animation: spin 1s linear infinite; }
+        .loader-small { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid #3498db; width: 24px; height: 24px; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         
         .filter-btn { padding: 8px 16px; border-radius: 8px; font-weight: bold; transition: all 0.2s; }
@@ -307,6 +315,63 @@
     <div id="admin-view" class="view"></div>
 
     <script type="module">
+        /*
+            --- SUPABASE SETUP FOR BATTLE RECORDS ---
+            
+            1. Create the 'battle_records' table in your Supabase SQL Editor:
+
+            CREATE TABLE public.battle_records (
+                character_id bigint NOT NULL,
+                wins integer DEFAULT 0 NOT NULL,
+                losses integer DEFAULT 0 NOT NULL,
+                CONSTRAINT battle_records_pkey PRIMARY KEY (character_id),
+                CONSTRAINT battle_records_character_id_fkey FOREIGN KEY (character_id) REFERENCES public.battle_characters(id) ON DELETE CASCADE
+            );
+            ALTER TABLE public.battle_records ENABLE ROW LEVEL SECURITY;
+            CREATE POLICY "Public records are viewable by everyone." ON public.battle_records FOR SELECT USING (true);
+            CREATE POLICY "Users can update their own character records." ON public.battle_records FOR UPDATE USING (auth.uid() = ( SELECT creator_id FROM public.battle_characters WHERE id = character_id ));
+
+
+            2. Create the 'update_battle_record' RPC function in your Supabase SQL Editor:
+
+            CREATE OR REPLACE FUNCTION public.update_battle_record(
+                char_id bigint,
+                is_win boolean
+            )
+            RETURNS void
+            LANGUAGE plpgsql
+            SECURITY DEFINER -- Important!
+            AS $$
+            BEGIN
+                IF is_win THEN
+                    INSERT INTO public.battle_records (character_id, wins, losses)
+                    VALUES (char_id, 1, 0)
+                    ON CONFLICT (character_id)
+                    DO UPDATE SET wins = battle_records.wins + 1;
+                ELSE
+                    INSERT INTO public.battle_records (character_id, wins, losses)
+                    VALUES (char_id, 0, 1)
+                    ON CONFLICT (character_id)
+                    DO UPDATE SET losses = battle_records.losses + 1;
+                END IF;
+            END;
+            $$;
+
+            3. Create the 'get_character_rank' RPC function for detailed ranking display:
+
+            CREATE OR REPLACE FUNCTION public.get_character_rank(char_id bigint)
+            RETURNS integer
+            LANGUAGE sql
+            AS $$
+              SELECT rank
+              FROM (
+                SELECT id, RANK() OVER (ORDER BY rank_points DESC) as rank
+                FROM public.battle_characters
+              ) as ranked_characters
+              WHERE id = char_id;
+            $$;
+        */
+
         // --- Supabase Client Setup ---
         const { createClient } = supabase;
         const SUPABASE_URL = 'https://yqnyinreoamegbahoxzq.supabase.co';
@@ -881,8 +946,15 @@ JSON 스키마에 맞춰 답변해주세요.
                 basePower *= 2.5;
             }
 
-            let atkStat = masterMove.category === 'Physical' ? attacker.stats.attack : attacker.stats.sp_atk;
-            let defStat = masterMove.category === 'Physical' ? defender.stats.defense : defender.stats.sp_def;
+            let atkStat, defStat;
+            if (masterMove.category === 'Physical') {
+                atkStat = attacker.stats.attack + (attacker.stats.sp_atk * 0.25); // Main ATK + 25% of SP_ATK
+                defStat = defender.stats.defense + (defender.stats.sp_def * 0.25); // Main DEF + 25% of SP_DEF
+            } else { // Special
+                atkStat = attacker.stats.sp_atk + (attacker.stats.attack * 0.25); // Main SP_ATK + 25% of ATK
+                defStat = defender.stats.sp_def + (defender.stats.defense * 0.25); // Main SP_DEF + 25% of DEF
+            }
+
 
             // Guts Ability
             if (attacker.ability?.id === 'GUTS' && attacker.battleStatus.status && masterMove.category === 'Physical') {
@@ -916,17 +988,28 @@ JSON 스키마에 맞춰 답변해주세요.
             return { damage: finalDamage, isCritical, effectiveness };
         }
 
-        async function updateRankings(winner, loser) {
+        async function updatePostBattleStats(winner, loser) {
+            // 1. Update Ranks (Elo)
             const K = 32;
             const winnerRank = winner.rank_points || 1000;
             const loserRank = loser.rank_points || 1000;
             const winnerExpected = 1 / (1 + 10 ** ((loserRank - winnerRank) / 400));
             const newWinnerRank = Math.round(winnerRank + K * (1 - winnerExpected));
             const newLoserRank = Math.max(0, Math.round(loserRank + K * (0 - (1 - winnerExpected))));
+            
+            // 2. Update Battle Records (W/L) using RPC
+            const { error: winnerRecordError } = await supabaseClient.rpc('update_battle_record', { char_id: winner.id, is_win: true });
+            const { error: loserRecordError } = await supabaseClient.rpc('update_battle_record', { char_id: loser.id, is_win: false });
+
+            if (winnerRecordError) console.error("Error updating winner record:", winnerRecordError);
+            if (loserRecordError) console.error("Error updating loser record:", loserRecordError);
+
+            // 3. Update Ranks in the characters table
             await Promise.all([
                 supabaseClient.from('battle_characters').update({ rank_points: newWinnerRank }).eq('id', winner.id),
                 supabaseClient.from('battle_characters').update({ rank_points: newLoserRank }).eq('id', loser.id)
             ]);
+
             return { rankChange: newWinnerRank - winnerRank, newWinnerRank, newLoserRank };
         }
         
@@ -996,7 +1079,11 @@ JSON 스키마에 맞춰 답변해주세요.
                     ${isHighRarity ? `<div class="rarity-star-icon" title="${char.rarity} 등급"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="text-yellow-400"><path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.007z" clip-rule="evenodd"></path></svg></div>` : ''}
                 </div>
                 <div class="flex flex-col sm:flex-row gap-4">
-                    <img src="${imageUrl}" alt="${char.name}" class="w-full sm:w-40 h-40 object-cover rounded-lg" loading="lazy" onerror="this.onerror=null;this.src='https://placehold.co/160x160/e0e0e0/757575?text=Image+Not+Found';">
+                    <div class="relative w-full sm:w-40 h-40 bg-gray-700 rounded-lg flex items-center justify-center">
+                        <div class="loader-small"></div>
+                        <img src="${imageUrl}" alt="${char.name}" class="absolute top-0 left-0 w-full h-full object-cover rounded-lg" loading="lazy" style="display:none;"
+                             onerror="this.parentElement.innerHTML = '<span class=\'text-xs text-gray-400\'>Image Error</span>';">
+                    </div>
                     <div class="flex-1">
                         <h3 class="font-bold text-xl">${char.name} <span class="text-sm text-gray-500">(${char.classification})</span></h3>
                         <div class="flex items-center gap-2 my-1"><span class="rarity-badge rarity-${char.rarity}">${char.rarity}</span><span class="universe-badge universe-${char.universe.replace(' ', '_')}">${char.universe}</span></div>
@@ -1010,6 +1097,14 @@ JSON 스키마에 맞춰 답변해주세요.
                 </div>
                 <div class="rank-display">${char.rank_points || 'Unranked'}</div>
             `;
+            
+            const img = card.querySelector('img');
+            img.onload = () => {
+                img.style.display = 'block';
+                const loader = card.querySelector('.loader-small');
+                if (loader) loader.style.display = 'none';
+            };
+            
             card.onclick = () => navigateTo('detail-view', char.id);
             card.querySelector('[data-profile-id]').onclick = (e) => { e.stopPropagation(); navigateTo('profile-view', e.target.dataset.profileId); };
             return card;
@@ -1019,6 +1114,12 @@ JSON 스키마에 맞춰 답변해주세요.
             if (isLoadingMore) return;
             isLoadingMore = true;
 
+            const loadMoreBtn = document.getElementById('load-more-btn');
+            if (loadMoreBtn) {
+                loadMoreBtn.innerHTML = `<div class="loader-small mx-auto"></div>`;
+                loadMoreBtn.disabled = true;
+            }
+
             const from = currentPage * PAGE_SIZE;
             const to = from + PAGE_SIZE - 1;
 
@@ -1026,6 +1127,11 @@ JSON 스키마에 맞춰 답변해주세요.
                 .select('*, profile:battle_profiles(id, nickname, email)', { count: 'exact' })
                 .order('created_at', { ascending: false })
                 .range(from, to);
+            
+            if (activeFilter !== 'all') {
+                const universeName = activeFilter.replace(/_/g, ' ');
+                query = query.eq('data->>universe', universeName);
+            }
 
             const { data, error, count } = await query;
 
@@ -1076,6 +1182,10 @@ JSON 스키마에 맞춰 답변해주세요.
 
             const { data: comments, error } = await supabaseClient.from('battle_comments').select('*, profile:battle_profiles(id, nickname, email)').eq('character_id', currentId).order('created_at', { ascending: false });
             if (error) console.error("Error fetching comments:", error);
+
+            const { data: record, error: recordError } = await supabaseClient.from('battle_records').select('wins, losses').eq('character_id', currentId).single();
+            if (recordError) console.log("No battle record found for this character yet.");
+
 
             const bst = Object.values(char.stats).reduce((a, b) => a + b, 0);
             const creatorName = char.profile?.nickname || char.profile?.email?.split('@')[0] || 'Unknown';
@@ -1137,6 +1247,7 @@ JSON 스키마에 맞춰 답변해주세요.
                             <div class="flex items-center gap-4">
                                 ${badgeHTML}
                                 <span class="text-lg font-bold text-yellow-400">${char.rank_points || 1000} RP</span>
+                                <span class="text-lg font-bold text-gray-300">${record ? `${record.wins}승 ${record.losses}패` : '전적 없음'}</span>
                             </div>
                         </div>
                         <div class="bg-gray-800 p-6 md:p-8">
@@ -1360,7 +1471,6 @@ JSON 스키마에 맞춰 답변해주세요.
                 const geometry = new THREE.PlaneGeometry(2 * aspect, 2);
                 const material = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
                 playerSprite = new THREE.Mesh(geometry, material);
-                playerSprite.position.set(-2.5, -1, 0);
                 scene.add(playerSprite);
             });
             loader.load(opponentImgUrl, (tex) => {
@@ -1368,11 +1478,19 @@ JSON 스키마에 맞춰 답변해주세요.
                 const geometry = new THREE.PlaneGeometry(2 * aspect, 2);
                 const material = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
                 opponentSprite = new THREE.Mesh(geometry, material);
-                opponentSprite.position.set(2.5, 1, 0);
                 scene.add(opponentSprite);
             });
 
             camera.position.z = 5;
+
+            function updateCharacterPositions() {
+                const vFOV = THREE.MathUtils.degToRad(camera.fov);
+                const height = 2 * Math.tan(vFOV / 2) * camera.position.z;
+                const width = height * camera.aspect;
+
+                if (playerSprite) playerSprite.position.x = -width / 4;
+                if (opponentSprite) opponentSprite.position.x = width / 4;
+            }
 
             // Animation Loop
             const clock = new THREE.Clock();
@@ -1386,15 +1504,32 @@ JSON 스키마에 맞춰 답변해주세요.
             }
             animate();
             
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                updateCharacterPositions();
+            }
+            window.addEventListener('resize', onWindowResize);
+            updateCharacterPositions(); // Initial positioning
+
             // --- Battle Logic (Starts Here) ---
             const battleLog = document.getElementById('battle-log');
             
+            // BUG FIX: Initialize all required battle status properties
             const initBattleStatus = (char) => ({
-                hp: char.stats.hp, shield: 0, status: null, nonDamageMoveCounter: 0,
-                buffs: [], debuffs: [], dots: [],
+                hp: char.stats.hp,
+                shield: 0,
+                status: null,
+                dots: [],
+                buffs: [],
+                debuffs: [],
+                fatigue: 1.0, // Starts at 100% effectiveness for heal/shield
+                momentum: 1.0, // Starts at 100% effectiveness for other moves
                 stat_stages: { attack: 1, defense: 1, sp_atk: 1, sp_def: 1, speed: 1 },
                 ability: char.ability,
             });
+
             playerChar.battleStatus = initBattleStatus(playerChar);
             opponentChar.battleStatus = initBattleStatus(opponentChar);
             let turn = 1;
@@ -1420,11 +1555,12 @@ JSON 스키마에 맞춰 답변해주세요.
             async function battleLoop() {
                 if (playerChar.battleStatus.hp <= 0 || opponentChar.battleStatus.hp <= 0) {
                     cancelAnimationFrame(battleAnimationId); // Stop animation
+                    window.removeEventListener('resize', onWindowResize);
                     const winner = playerChar.battleStatus.hp > 0 ? playerChar : opponentChar;
                     const loser = playerChar.battleStatus.hp <= 0 ? playerChar : opponentChar;
                     log(`<span class="log-win">🎉 ${winner.name}의 승리!</span>`);
                     playVictorySound();
-                    const { rankChange, newWinnerRank, newLoserRank } = await updateRankings(winner, loser);
+                    const { rankChange, newWinnerRank, newLoserRank } = await updatePostBattleStats(winner, loser);
 
                     const winnerIndex = allCharacters.findIndex(c => c.id === winner.id);
                     if (winnerIndex > -1) allCharacters[winnerIndex].rank_points = newWinnerRank;
@@ -1459,6 +1595,7 @@ JSON 스키마에 맞춰 답변해주세요.
                 
                 if (!playerMasterMove || !opponentMasterMove) {
                     cancelAnimationFrame(battleAnimationId);
+                    window.removeEventListener('resize', onWindowResize);
                     showModal('배틀 오류', '<p>오래된 스킬 데이터를 가진 크리처가 있어 배틀을 진행할 수 없습니다.</p>');
                     navigateTo('pokedex-view');
                     return;
@@ -1545,16 +1682,12 @@ JSON 스키마에 맞춰 답변해주세요.
                     const isDesperate = attacker.battleStatus.hp / attacker.stats.hp <= 0.25;
                     if (isDesperate) log(`<span class="log-desperate">${attacker.name}의 궁지(Desperate) 상태 발동!</span>`);
 
-                    // --- FATIGUE SYSTEM REFINED ---
-                    let fatigueModifier = 1.0;
+                    // --- FATIGUE & MOMENTUM SYSTEM ---
                     if (masterMove.type === 'heal' || masterMove.type === 'shield') {
-                        attacker.battleStatus.nonDamageMoveCounter++;
-                        if (attacker.battleStatus.nonDamageMoveCounter >= 2) {
-                            fatigueModifier = 0.5;
-                            log(`<span class="log-debuff">${attacker.name}은(는) 피로 때문에 기술 효과가 감소했다!</span>`);
-                        }
+                        attacker.battleStatus.fatigue *= 0.8; // Effectiveness decreases by 20% each use
+                        log(`<span class="log-debuff">${attacker.name}이(가) 지쳐서 회복/보호막 효과가 감소했다!</span>`);
                     } else {
-                        attacker.battleStatus.nonDamageMoveCounter = 0;
+                        attacker.battleStatus.momentum += 0.05; // Power increases by 5% each turn
                     }
 
                     // Apply effects...
@@ -1574,7 +1707,7 @@ JSON 스키마에 맞춰 답변해주세요.
                             }
                             break;
                         case 'heal':
-                            const healAmount = Math.floor(attacker.stats.hp * masterMove.power * fatigueModifier);
+                            const healAmount = Math.floor(attacker.stats.hp * masterMove.power * attacker.battleStatus.fatigue);
                             attacker.battleStatus.hp = Math.min(attacker.stats.hp, attacker.battleStatus.hp + healAmount);
                             log(`<span class="log-heal">${attacker.name}은(는) HP를 ${healAmount} 회복했다!</span>`);
                             break;
@@ -1599,7 +1732,7 @@ JSON 스키마에 맞춰 답변해주세요.
                              updateSpriteEffect(defenderSprite, masterMove.effect);
                              break;
                         case 'shield':
-                             attacker.battleStatus.shield += Math.floor(attacker.stats.hp * masterMove.amount * fatigueModifier);
+                             attacker.battleStatus.shield += Math.floor(attacker.stats.hp * masterMove.amount * attacker.battleStatus.fatigue);
                              log(`<span class="log-shield">${attacker.name}에게 보호막이 생겼다!</span>`);
                              break;
                     }
@@ -1930,23 +2063,21 @@ JSON 스키마에 맞춰 답변해주세요.
             const renderer = new THREE.WebGLRenderer({ canvas, alpha: true });
             
             renderer.setSize(window.innerWidth, 700);
-            camera.position.z = 5;
+            camera.position.z = 1;
 
             const particlesGeometry = new THREE.BufferGeometry();
-            const count = 500;
+            const count = 2000;
             const positions = new Float32Array(count * 3);
-            const colors = new Float32Array(count * 3); // For colors
+            const colors = new Float32Array(count * 3);
 
             const color1 = new THREE.Color(0x6A0DAD); // Purple
             const color2 = new THREE.Color(0x0077BE); // Blue
 
             for(let i = 0; i < count; i++) {
-                // Position
                 positions[i * 3] = (Math.random() - 0.5) * 10;
                 positions[i * 3 + 1] = (Math.random() - 0.5) * 10;
                 positions[i * 3 + 2] = (Math.random() - 0.5) * 10;
 
-                // Color
                 const mixedColor = Math.random() > 0.5 ? color1 : color2;
                 colors[i * 3] = mixedColor.r;
                 colors[i * 3 + 1] = mixedColor.g;
@@ -1956,11 +2087,11 @@ JSON 스키마에 맞춰 답변해주세요.
             particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
             const particlesMaterial = new THREE.PointsMaterial({
-                size: 0.03,
+                size: 0.02,
                 sizeAttenuation: true,
                 transparent: true,
-                opacity: 0.8,
-                vertexColors: true // Enable vertex colors
+                opacity: 0.9,
+                vertexColors: true
             });
             const particles = new THREE.Points(particlesGeometry, particlesMaterial);
             scene.add(particles);
@@ -1969,9 +2100,7 @@ JSON 스키마에 맞춰 답변해주세요.
 
             const animate = () => {
                 const elapsedTime = clock.getElapsedTime();
-
-                // Update particles
-                particles.rotation.y = elapsedTime * 0.1;
+                particles.position.z = (elapsedTime * 0.5) % 5;
                 
                 renderer.render(scene, camera);
                 pokedexAnimationId = window.requestAnimationFrame(animate);
@@ -1979,8 +2108,10 @@ JSON 스키마에 맞춰 답변해주세요.
             animate();
 
             window.addEventListener('resize', () => {
-                renderer.setSize(window.innerWidth, 700);
-                camera.aspect = window.innerWidth / 700;
+                const container = document.getElementById('pokedex-view-background');
+                const newHeight = container.clientHeight;
+                renderer.setSize(window.innerWidth, newHeight);
+                camera.aspect = window.innerWidth / newHeight;
                 camera.updateProjectionMatrix();
             });
         }
