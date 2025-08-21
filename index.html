@@ -968,6 +968,10 @@ JSON 스키마에 맞춰 답변해주세요.
             if (isDesperate) atkStat *= 1.25;
 
             let damage = (((2 * 40 / 5 + 2) * atkStat * basePower / defStat) / 50) + 2;
+            
+            // BUG FIX: Apply momentum to damage calculation
+            damage *= attacker.battleStatus.momentum;
+
             let effectiveness = 1;
             defender.types.forEach(defType => {
                 const moveTypeKey = Object.keys(typeTranslations).find(key => typeTranslations[key] === move.type) || move.type;
