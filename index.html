@@ -1103,11 +1103,18 @@ JSON 스키마에 맞춰 답변해주세요.
             `;
             
             const img = card.querySelector('img');
-            img.onload = () => {
-                img.style.display = 'block';
-                const loader = card.querySelector('.loader-small');
+            const loader = card.querySelector('.loader-small');
+
+            const handleImageLoad = () => {
+                if (img) img.style.display = 'block';
                 if (loader) loader.style.display = 'none';
             };
+
+            if (img.complete) {
+                handleImageLoad();
+            } else {
+                img.onload = handleImageLoad;
+            }
             
             card.onclick = () => navigateTo('detail-view', char.id);
             card.querySelector('[data-profile-id]').onclick = (e) => { e.stopPropagation(); navigateTo('profile-view', e.target.dataset.profileId); };
