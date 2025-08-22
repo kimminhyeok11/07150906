@@ -1323,6 +1323,7 @@ JSON 스키마에 맞춰 답변해주세요.
         // --- BATTLE SELECTION VIEW (REFACTORED) ---
         function createBattleSelectionCard(char) {
             const creatorName = char.profile?.nickname || char.profile?.email?.split('@')[0] || 'Unknown';
+            const recordText = char.record ? `${char.record.wins || 0}승 ${char.record.losses || 0}패` : '전적 없음';
             return `
                 <div class="pokedex-card rounded-lg shadow p-4 card-border-${char.rarity}">
                     <div class="flex flex-col sm:flex-row gap-4">
@@ -1337,6 +1338,7 @@ JSON 스키마에 맞춰 답변해주세요.
                                 ${char.types.map(t => `<span class="type-badge type-${t}" style="font-size: 0.7rem; padding: 2px 8px;">${typeTranslations[t] || t}</span>`).join('')}
                             </div>
                             <p class="text-xs text-gray-400">랭크: ${char.rank_points || 1000} RP</p>
+                            <p class="text-xs text-gray-400 mt-1">전적: ${recordText}</p>
                         </div>
                     </div>
                 </div>
@@ -1346,14 +1348,17 @@ JSON 스키마에 맞춰 답변해주세요.
         window.renderBattleSelectionView = async function() {
             if (!currentUser) { navigateTo('auth-view'); return; }
             
-            // For battle selection, we need all characters, so we fetch them all here.
-            // This is a trade-off for simplicity in the battle selection logic.
-            const { data: allCharsForBattle, error } = await supabaseClient.from('battle_characters').select('*, profile:battle_profiles(id, nickname, email)');
+            battleSelectionViewContainer.innerHTML = `<div class="flex justify-center items-center h-64"><div class="loader"></div></div>`;
+
+            const { data: allCharsForBattle, error } = await supabaseClient.from('battle_characters')
+                .select('*, profile:battle_profiles(id, nickname, email), record:battle_records(wins, losses)');
+            
             if (error) {
                 showModal('오류', '캐릭터 목록을 불러오지 못했습니다.');
+                battleSelectionViewContainer.innerHTML = '';
                 return;
             }
-            const battleReadyChars = allCharsForBattle.map(c => ({ ...c.data, id: c.id, creator_id: c.creator_id, rank_points: c.rank_points, image_url: c.image_url, profile: c.profile }));
+            const battleReadyChars = allCharsForBattle.map(c => ({ ...c.data, id: c.id, creator_id: c.creator_id, rank_points: c.rank_points, image_url: c.image_url, profile: c.profile, record: c.record }));
 
             const myCharacters = battleReadyChars.filter(c => c.creator_id === currentUser.id);
 
@@ -1478,19 +1483,22 @@ JSON 스키마에 맞춰 답변해주세요.
             const opponentImgUrl = `${opponentChar.image_url}?width=512&quality=85`;
 
             loader.load(playerImgUrl, (tex) => {
-                const aspect = tex.image.width / tex.image.height;
+                const aspect = tex.image ? tex.image.width / tex.image.height : 1;
                 const geometry = new THREE.PlaneGeometry(2 * aspect, 2);
                 const material = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
                 playerSprite = new THREE.Mesh(geometry, material);
                 scene.add(playerSprite);
-            });
+                onAssetLoad();
+            }, undefined, () => onAssetError('player'));
+
             loader.load(opponentImgUrl, (tex) => {
-                const aspect = tex.image.width / tex.image.height;
+                const aspect = tex.image ? tex.image.width / tex.image.height : 1;
                 const geometry = new THREE.PlaneGeometry(2 * aspect, 2);
                 const material = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
                 opponentSprite = new THREE.Mesh(geometry, material);
                 scene.add(opponentSprite);
-            });
+                onAssetLoad();
+            }, undefined, () => onAssetError('opponent'));
 
             camera.position.z = 5;
 
@@ -1544,6 +1552,33 @@ JSON 스키마에 맞춰 답변해주세요.
             playerChar.battleStatus = initBattleStatus(playerChar);
             opponentChar.battleStatus = initBattleStatus(opponentChar);
             let turn = 1;
+
+            let assetsLoaded = 0;
+            const totalAssets = 2;
+
+            const onAssetLoad = () => {
+                assetsLoaded++;
+                if (assetsLoaded === totalAssets) {
+                    applyStartOfBattleAbilities();
+                    setTimeout(battleLoop, 2000);
+                }
+            };
+
+            const onAssetError = (spriteType) => {
+                console.error(`${spriteType} image failed to load.`);
+                const geometry = new THREE.PlaneGeometry(2, 2);
+                const material = new THREE.MeshBasicMaterial({ color: 0x888888 });
+                const placeholder = new THREE.Mesh(geometry, material);
+                if (spriteType === 'player') {
+                    playerSprite = placeholder;
+                    scene.add(playerSprite);
+                } else {
+                    opponentSprite = placeholder;
+                    scene.add(opponentSprite);
+                }
+                onAssetLoad();
+            };
+
 
             function log(message) {
                 battleLog.innerHTML += `<p>${message}</p>`;
