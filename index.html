@@ -4,11 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>몬배틀 헌터즈 (MonBattle Hunters)</title>
-    <!-- Tailwind CSS, Tone.js, Supabase, Three.js -->
+    <!-- Tailwind CSS, Tone.js, Supabase, Three.js, GSAP -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.9.1/gsap.min.js"></script>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -61,6 +62,18 @@
         .stat-bar-bg { background-color: #515151; border-radius: 999px; }
         .stat-bar { transition: width 0.8s ease-out; border-radius: 999px; }
         .rank-display { position: absolute; bottom: 8px; right: 8px; background-color: rgba(0,0,0,0.7); color: white; padding: 4px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; }
+        .level-display {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: #facc15; /* yellow-400 */
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+            z-index: 2;
+        }
 
         /* Type & Universe Badges */
         .type-badge { padding: 4px 12px; border-radius: 12px; font-weight: 700; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
@@ -104,7 +117,7 @@
         @keyframes pulse-rare { 0%, 100% { box-shadow: 0 0 4px #42A5F5; } 50% { box-shadow: 0 0 12px #42A5F5; } }
         .card-rarity-희귀 { animation: pulse-rare 3s ease-in-out infinite; }
 
-        /* NEW: Shimmer Effect for High-Rarity Cards */
+        /* Shimmer Effect for High-Rarity Cards */
         .shimmer-effect::after {
             content: '';
             position: absolute;
@@ -138,6 +151,15 @@
         #battle-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
         .battle-ui-overlay { position: relative; z-index: 2; pointer-events: none; }
         .battle-ui-overlay > * { pointer-events: all; }
+        @keyframes screen-shake {
+            0% { transform: translate(1px, 1px) rotate(0deg); } 10% { transform: translate(-1px, -2px) rotate(-1deg); }
+            20% { transform: translate(-3px, 0px) rotate(1deg); } 30% { transform: translate(3px, 2px) rotate(0deg); }
+            40% { transform: translate(1px, -1px) rotate(1deg); } 50% { transform: translate(-1px, 2px) rotate(-1deg); }
+            60% { transform: translate(-3px, 1px) rotate(0deg); } 70% { transform: translate(3px, 1px) rotate(-1deg); }
+            80% { transform: translate(-1px, -1px) rotate(1deg); } 90% { transform: translate(1px, 2px) rotate(0deg); }
+            100% { transform: translate(1px, -2px) rotate(-1deg); }
+        }
+        .screen-shake { animation: screen-shake 0.3s; }
 
         .hp-bar-inner { transition: width 0.5s ease-in-out; }
         #battle-log { height: 150px; backdrop-filter: blur(5px); }
@@ -162,6 +184,20 @@
         .impact-text.super-effective { color: #a3ffb4; }
         @keyframes impact-pop { 0% { transform: translate(-50%, -50%) scale(0.5); opacity: 0; } 20% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; } 80% { transform: translate(-50%, -50%) scale(1); opacity: 1; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 0; } }
         
+        .damage-number {
+            position: absolute;
+            font-size: 2rem;
+            font-weight: bold;
+            font-family: 'Black Han Sans', sans-serif;
+            text-shadow: 2px 2px 3px rgba(0,0,0,0.7);
+            pointer-events: none;
+            color: white;
+        }
+        .damage-number.crit {
+            color: #fffa65;
+            font-size: 2.5rem;
+        }
+
         .battle-moves-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
         .battle-move-item { background-color: rgba(0,0,0,0.5); padding: 4px; border-radius: 4px; font-size: 0.7rem; text-align: center; transition: all 0.2s ease; cursor: pointer; }
         .battle-move-item:hover { background-color: rgba(255,255,255,0.1); }
@@ -169,10 +205,6 @@
         .skill-use-animation { animation: skill-use-glow 0.5s ease-in-out; }
 
         /* General UI Components */
-        .loader { border: 8px solid #f3f3f3; border-radius: 50%; border-top: 8px solid #3498db; width: 60px; height: 60px; animation: spin 1s linear infinite; }
-        .loader-small { border: 4px solid #f3f3f3; border-radius: 50%; border-top: 4px solid #3498db; width: 24px; height: 24px; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-        
         .filter-btn { padding: 8px 16px; border-radius: 8px; font-weight: bold; transition: all 0.2s; }
         .filter-btn.active { background-color: #8abeb7; color: white; }
         .filter-btn:not(.active) { background-color: #515151; color: #cccccc; }
@@ -211,7 +243,6 @@
 <body class="bg-[#2d2d2d] text-gray-300">
     <!-- Overlays and Loaders -->
     <div id="skill-effect-overlay"></div>
-    <div id="main-loader" class="fixed inset-0 bg-gray-900/80 flex justify-center items-center z-[2000]"><div class="loader"></div></div>
     <div id="modal-container"></div>
     <div id="battle-effects-container"></div>
 
@@ -287,18 +318,17 @@
                 <div class="mt-4 flex justify-center items-center gap-4">
                     <button id="generate-btn" class="bg-[#8abeb7] text-white font-bold py-3 px-6 rounded-lg hover:bg-[#6cc] transition-transform transform hover:scale-105">
                         <span id="btn-text">크리처 소환! (1 크레딧)</span>
-                        <span id="btn-loader" class="hidden w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                     </button>
                 </div>
                 <div id="error-message" class="text-yellow-400 mt-4 text-center text-sm font-semibold"></div>
             </div>
              <div id="filter-container" class="flex justify-center gap-2 mb-6">
-                 <button class="filter-btn active" data-filter="all">전체</button>
-                 <button class="filter-btn" data-filter="감성의_숲">감성의 숲</button>
-                 <button class="filter-btn" data-filter="악몽의_저택">악몽의 저택</button>
-                 <button class="filter-btn" data-filter="사이버_펑크">사이버 펑크</button>
-                 <button class="filter-btn" data-filter="판타지_왕국">판타지 왕국</button>
-                 <button class="filter-btn" data-filter="수정_동굴">수정 동굴</button>
+                  <button class="filter-btn active" data-filter="all">전체</button>
+                  <button class="filter-btn" data-filter="감성의_숲">감성의 숲</button>
+                  <button class="filter-btn" data-filter="악몽의_저택">악몽의 저택</button>
+                  <button class="filter-btn" data-filter="사이버_펑크">사이버 펑크</button>
+                  <button class="filter-btn" data-filter="판타지_왕국">판타지 왕국</button>
+                  <button class="filter-btn" data-filter="수정_동굴">수정 동굴</button>
              </div>
             <div id="pokedex-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"></div>
             <div id="empty-state" class="text-center py-16 px-6 bg-gray-800 rounded-2xl shadow-lg hidden"><h3 class="mt-4 text-xl font-semibold text-gray-100">도감이 비어있습니다. 첫 크리처를 소환해보세요!</h3></div>
@@ -380,7 +410,6 @@
 
         // --- DOM Elements ---
         const views = document.querySelectorAll('.view');
-        const mainLoader = document.getElementById('main-loader');
         const modalContainer = document.getElementById('modal-container');
         const navLinks = document.getElementById('nav-links');
         const homeBtn = document.getElementById('home-btn');
@@ -396,7 +425,6 @@
         const emptyState = document.getElementById('empty-state');
         const errorMessage = document.getElementById('error-message');
         const btnText = document.getElementById('btn-text');
-        const btnLoader = document.getElementById('btn-loader');
         const goToBattleBtn = document.getElementById('go-to-battle-btn');
         const goToRankingBtn = document.getElementById('go-to-ranking-btn');
         const showTypeChartBtn = document.getElementById('show-type-chart-btn');
@@ -450,24 +478,24 @@
             'DMG_SPE_L': { type: 'damage', category: 'Special', power: 120, text: '매우 강한 특수 공격' },
             // High-Risk High-Reward
             'DMG_PHY_XL_RECOIL': { type: 'damage', category: 'Physical', power: 150, recoil: 0.33, text: '초강력 물리 공격, 준 데미지의 33%를 반동 데미지로 받음' },
-            'DMG_SPE_DEBUFF_SELF': { type: 'damage', category: 'Special', power: 140, selfDebuff: { stat: 'sp_atk', amount: 0.75, turns: 99 }, text: '초강력 특수 공격, 사용 후 자신의 특공이 영구히 하락' },
+            'DMG_SPE_DEBUFF_SELF': { type: 'damage', category: 'Special', power: 140, selfDebuff: { stat: 'sp_atk', amount: -2, turns: 99 }, text: '초강력 특수 공격, 사용 후 자신의 특공이 영구히 하락' },
             // Priority
             'DMG_PHY_PRIORITY': { type: 'damage', category: 'Physical', power: 40, priority: 1, text: '위력은 낮지만 반드시 선제공격' },
             // Conditional
             'DMG_SPE_CONDITIONAL_STATUS': { type: 'damage', category: 'Special', power: 70, conditional: 'status', multiplier: 2, text: '상대가 상태 이상일 때 위력 2배' },
             'DMG_PHY_LOW_HP_BOOST': { type: 'damage', category: 'Physical', power: 60, conditional: 'low_hp', text: '자신의 HP가 1/3 이하일 때 위력 2.5배' },
             // Healing (NERFED)
-            'HEAL_S': { type: 'heal', power: 0.15, text: '자신 최대 HP의 15% 회복' },
-            'HEAL_M': { type: 'heal', power: 0.30, text: '자신 최대 HP의 30% 회복' },
+            'HEAL_S': { type: 'heal', power: 0.25, text: '자신 최대 HP의 25% 회복' },
+            'HEAL_M': { type: 'heal', power: 0.50, text: '자신 최대 HP의 50% 회복' },
             // Buffs (Self)
-            'BUFF_ATK_S': { type: 'buff', stat: 'attack', amount: 1.5, turns: 3, text: '자신 공격 상승 (3턴)' },
-            'BUFF_DEF_S': { type: 'buff', stat: 'defense', amount: 1.5, turns: 3, text: '자신 방어 상승 (3턴)' },
-            'BUFF_SPD_S': { type: 'buff', stat: 'speed', amount: 1.5, turns: 3, text: '자신 속도 상승 (3턴)' },
-            'BUFF_ALL_S': { type: 'buff', stat: 'all', amount: 1.2, turns: 2, text: '자신 모든 능력치 상승 (2턴)' },
+            'BUFF_ATK_S': { type: 'buff', stat: 'attack', amount: 1, turns: 3, text: '자신 공격 상승 (3턴)' },
+            'BUFF_DEF_S': { type: 'buff', stat: 'defense', amount: 1, turns: 3, text: '자신 방어 상승 (3턴)' },
+            'BUFF_SPD_S': { type: 'buff', stat: 'speed', amount: 1, turns: 3, text: '자신 속도 상승 (3턴)' },
+            'BUFF_ALL_S': { type: 'buff', stat: 'all', amount: 1, turns: 2, text: '자신 모든 능력치 상승 (2턴)' },
             // Debuffs (Opponent)
-            'DEBUFF_ATK_S': { type: 'debuff', stat: 'attack', amount: 0.75, turns: 3, text: '상대 공격 하락 (3턴)' },
-            'DEBUFF_DEF_S': { type: 'debuff', stat: 'defense', amount: 0.75, turns: 3, text: '상대 방어 하락 (3턴)' },
-            'DEBUFF_SPD_S': { type: 'debuff', stat: 'speed', amount: 0.75, turns: 3, text: '상대 속도 하락 (3턴)' },
+            'DEBUFF_ATK_S': { type: 'debuff', stat: 'attack', amount: -1, turns: 3, text: '상대 공격 하락 (3턴)' },
+            'DEBUFF_DEF_S': { type: 'debuff', stat: 'defense', amount: -1, turns: 3, text: '상대 방어 하락 (3턴)' },
+            'DEBUFF_SPD_S': { type: 'debuff', stat: 'speed', amount: -1, turns: 3, text: '상대 속도 하락 (3턴)' },
             // Status Effects
             'STATUS_POISON': { type: 'status', effect: 'poison', chance: 0.3, text: '30% 확률로 상대를 중독 상태로 만듦' },
             'STATUS_PARALYSIS': { type: 'status', effect: 'paralysis', chance: 0.3, text: '30% 확률로 상대를 마비 상태로 만듦' },
@@ -536,8 +564,11 @@
         
         function setLoadingState(isLoading) {
             generateBtn.disabled = isLoading;
-            btnText.classList.toggle('hidden', isLoading);
-            btnLoader.classList.toggle('hidden', !isLoading);
+            if (isLoading) {
+                btnText.textContent = '생성 중...';
+            } else {
+                btnText.textContent = '크리처 소환! (1 크레딧)';
+            }
         }
 
         function showModal(title, content, onConfirm) {
@@ -631,7 +662,6 @@
 
         // --- Data Fetching & Realtime ---
         async function initialDataLoad() {
-            mainLoader.style.display = 'flex';
             try {
                 // Fetch profiles first, as they are needed for characters
                 const { data: profilesData, error: profilesError } = await supabaseClient.from('battle_profiles').select('*');
@@ -653,8 +683,6 @@
             } catch (error) {
                 console.error("Error on initial data load:", error);
                 showModal('데이터 로딩 오류', `<p>데이터를 불러오는 데 실패했습니다: ${error.message}</p>`);
-            } finally {
-                mainLoader.style.display = 'none';
             }
         }
 
@@ -679,11 +707,16 @@
                     allCharacters.unshift(newChar); // Add to the beginning of the list
                 } else if (eventType === 'UPDATE') {
                     if (index > -1) {
-                        const updatedCharacter = { ...allCharacters[index], ...newRecord };
-                        if (newRecord.data) {
-                            Object.assign(updatedCharacter, newRecord.data);
-                        }
-                        delete updatedCharacter.data;
+                        // Construct the full, updated character object from the payload
+                        const updatedCharacter = {
+                            ...newRecord.data,
+                            id: newRecord.id,
+                            created_at: newRecord.created_at,
+                            creator_id: newRecord.creator_id,
+                            rank_points: newRecord.rank_points,
+                            image_url: newRecord.image_url,
+                            profile: allProfiles.find(p => p.id === newRecord.creator_id)
+                        };
                         allCharacters[index] = updatedCharacter;
                     }
                 } else if (eventType === 'DELETE') {
@@ -704,8 +737,8 @@
             if (activeView && activeView.id !== 'battle-arena-view') {
                 const renderFunctionName = `render${activeView.id.charAt(0).toUpperCase() + activeView.id.slice(1).replace(/-./g, x=>x[1].toUpperCase())}`;
                  if (window[renderFunctionName] && typeof window[renderFunctionName] === 'function') {
-                      const currentId = activeView.dataset.id;
-                      window[renderFunctionName](currentId);
+                       const currentId = activeView.dataset.id;
+                       window[renderFunctionName](currentId);
                  }
             }
             if (document.getElementById('pokedex-view').classList.contains('active')) {
@@ -870,11 +903,13 @@
             const payload = { instances: [{ prompt: fullPrompt }], parameters: { "sampleCount": 1 } };
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`;
             const result = await callApiWithRetry(apiUrl, payload);
-            if (result.predictions?.[0]?.bytesBase64Encoded) return `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+
+            if (result.predictions?.[0]?.bytesBase64Encoded) {
+                return `data:image/png;base64,${result.predictions[0].bytesBase64Encoded}`;
+            }
             throw new Error("Image data was not returned from the API.");
         }
 
-        // [UPDATED] AI Prompt to include Abilities
         async function generateCharacterData(prompt, universe, rarity, bstRange) {
             const apiKey = ""; // The environment will inject the key.
             const skillListForPrompt = Object.entries(MASTER_SKILL_LIST).map(([id, skill]) => `- ${id}: ${skill.text}`).join('\n');
@@ -927,14 +962,24 @@ JSON 스키마에 맞춰 답변해주세요.
             throw new Error("Character data generation failed.");
         }
         
-        // --- [UPDATED] Battle & Ranking Logic ---
+        // --- [UPDATED & REBALANCED] Battle & Ranking Logic ---
+        const statStageMultipliers = {
+            '-6': 2/8, '-5': 2/7, '-4': 2/6, '-3': 2/5, '-2': 2/4, '-1': 2/3,
+            '0': 1,
+            '1': 3/2, '2': 4/2, '3': 5/2, '4': 6/2, '5': 7/2, '6': 8/2
+        };
+
+        function getStatMultiplier(stage) {
+            return statStageMultipliers[stage] || 1;
+        }
+
         function calculateDamage(attacker, defender, move, isDesperate) {
             const masterMove = MASTER_SKILL_LIST[move.moveId];
             if (masterMove.type !== 'damage' || !masterMove.power) return { damage: 0, isCritical: false, effectiveness: 1 };
             
             let basePower = masterMove.power;
             // Technician Ability
-            if (attacker.ability?.id === 'TECHNICIAN' && basePower <= 60) {
+            if (attacker.battleStatus.ability?.id === 'TECHNICIAN' && basePower <= 60) {
                 basePower *= 1.5;
             }
 
@@ -948,30 +993,22 @@ JSON 스키마에 맞춰 답변해주세요.
 
             let atkStat, defStat;
             if (masterMove.category === 'Physical') {
-                atkStat = attacker.stats.attack + (attacker.stats.sp_atk * 0.25); // Main ATK + 25% of SP_ATK
-                defStat = defender.stats.defense + (defender.stats.sp_def * 0.25); // Main DEF + 25% of SP_DEF
+                atkStat = attacker.stats.attack * getStatMultiplier(attacker.battleStatus.stat_stages.attack);
+                defStat = defender.stats.defense * getStatMultiplier(defender.battleStatus.stat_stages.defense);
             } else { // Special
-                atkStat = attacker.stats.sp_atk + (attacker.stats.attack * 0.25); // Main SP_ATK + 25% of ATK
-                defStat = defender.stats.sp_def + (defender.stats.defense * 0.25); // Main SP_DEF + 25% of DEF
+                atkStat = attacker.stats.sp_atk * getStatMultiplier(attacker.battleStatus.stat_stages.sp_atk);
+                defStat = defender.stats.sp_def * getStatMultiplier(defender.battleStatus.stat_stages.sp_def);
             }
-
 
             // Guts Ability
-            if (attacker.ability?.id === 'GUTS' && attacker.battleStatus.status && masterMove.category === 'Physical') {
+            if (attacker.battleStatus.ability?.id === 'GUTS' && attacker.battleStatus.status && masterMove.category === 'Physical') {
                 atkStat *= 1.5;
             }
-
-            // Apply stat stage multipliers from buffs/debuffs
-            atkStat *= attacker.battleStatus.stat_stages.attack;
-            defStat *= defender.battleStatus.stat_stages.defense;
             
             if (isDesperate) atkStat *= 1.25;
 
             let damage = (((2 * 40 / 5 + 2) * atkStat * basePower / defStat) / 50) + 2;
             
-            // BUG FIX: Apply momentum to damage calculation
-            damage *= attacker.battleStatus.momentum;
-
             let effectiveness = 1;
             defender.types.forEach(defType => {
                 const moveTypeKey = Object.keys(typeTranslations).find(key => typeTranslations[key] === move.type) || move.type;
@@ -979,7 +1016,7 @@ JSON 스키마에 맞춰 답변해주세요.
             });
             if (attacker.types.some(t => typeTranslations[t] === move.type)) damage *= 1.5;
             damage *= effectiveness;
-            const isCritical = Math.random() < (isDesperate ? 1/8 : 1/24);
+            const isCritical = Math.random() < (isDesperate ? 0.25 : 0.15); // 15% base crit chance
             if (isCritical) damage *= 1.5;
             
             let finalDamage = Math.floor(damage);
@@ -1013,6 +1050,10 @@ JSON 스키마에 맞춰 답변해주세요.
                 supabaseClient.from('battle_characters').update({ rank_points: newWinnerRank }).eq('id', winner.id),
                 supabaseClient.from('battle_characters').update({ rank_points: newLoserRank }).eq('id', loser.id)
             ]);
+
+            // 4. Grant Experience to the winner
+            await supabaseClient.rpc('grant_experience_and_level_up', { char_id: winner.id, xp_to_add: 50 });
+
 
             return { rankChange: newWinnerRank - winnerRank, newWinnerRank, newLoserRank };
         }
@@ -1062,7 +1103,7 @@ JSON 스키마에 맞춰 답변해주세요.
             const hasStatusMove = char.moves.some(m => m && m.moveId && MASTER_SKILL_LIST[m.moveId]?.type === 'status');
             const isHighRarity = ['전설', '고대', '신화'].includes(char.rarity);
             const creatorName = char.profile?.nickname || char.profile?.email?.split('@')[0] || 'Unknown';
-            const rank = -1; // Rank is now determined from a separate full list if needed
+            const level = char.level || 0;
             
             const card = document.createElement('div');
             card.id = `char-card-${char.id}`;
@@ -1078,14 +1119,10 @@ JSON 스키마에 맞춰 답변해주세요.
             const imageUrl = `${char.image_url}?width=320&quality=80`;
 
             card.innerHTML = `
-                <div class="icon-container">
-                    ${hasStatusMove ? `<div class="status-icon" title="상태이상 기술 보유"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="text-purple-500"><path d="M11.25 3.25c.41 0 .75.34.75.75v1.5a.75.75 0 0 1-1.5 0v-1.5c0-.41.34-.75.75-.75zM11.25 18.5c.41 0 .75.34.75.75v1.5a.75.75 0 0 1-1.5 0v-1.5c0-.41.34-.75.75-.75zM5.5 11.25c0-.41.34-.75.75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75zM18.5 11.25c0-.41.34-.75.75-.75h1.5a.75.75 0 0 1 0 1.5h-1.5a.75.75 0 0 1-.75-.75zM7.693 7.693a.75.75 0 0 1 1.06 0l1.061 1.06a.75.75 0 1 1-1.06 1.06l-1.06-1.06a.75.75 0 0 1 0-1.06zM15.25 15.25a.75.75 0 0 1 1.06 0l1.061 1.06a.75.75 0 1 1-1.06 1.06l-1.06-1.06a.75.75 0 0 1 0-1.06zM7.693 16.307a.75.75 0 0 1 0-1.06l1.06-1.06a.75.75 0 0 1 1.06 1.06l-1.06 1.061a.75.75 0 0 1-1.06 0zM15.25 8.75a.75.75 0 0 1 0-1.06l1.06-1.06a.75.75 0 0 1 1.06 1.06l-1.06 1.061a.75.75 0 0 1-1.06 0z"></path></svg></div>` : ''}
-                    ${isHighRarity ? `<div class="rarity-star-icon" title="${char.rarity} 등급"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="text-yellow-400"><path fill-rule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.007 5.404.433c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.433 2.082-5.007z" clip-rule="evenodd"></path></svg></div>` : ''}
-                </div>
                 <div class="flex flex-col sm:flex-row gap-4">
                     <div class="relative w-full sm:w-40 h-40 bg-gray-700 rounded-lg flex items-center justify-center">
-                        <div class="loader-small"></div>
-                        <img src="${imageUrl}" alt="${char.name}" class="absolute top-0 left-0 w-full h-full object-cover rounded-lg" loading="lazy" style="display:none;"
+                        <div class="level-display">LV.${level}</div>
+                        <img src="${imageUrl}" alt="${char.name}" class="absolute top-0 left-0 w-full h-full object-cover rounded-lg" loading="lazy"
                              onerror="this.parentElement.innerHTML = '<span class=\'text-xs text-gray-400\'>Image Error</span>';">
                     </div>
                     <div class="flex-1">
@@ -1102,20 +1139,6 @@ JSON 스키마에 맞춰 답변해주세요.
                 <div class="rank-display">${char.rank_points || 'Unranked'}</div>
             `;
             
-            const img = card.querySelector('img');
-            const loader = card.querySelector('.loader-small');
-
-            const handleImageLoad = () => {
-                if (img) img.style.display = 'block';
-                if (loader) loader.style.display = 'none';
-            };
-
-            if (img.complete) {
-                handleImageLoad();
-            } else {
-                img.onload = handleImageLoad;
-            }
-            
             card.onclick = () => navigateTo('detail-view', char.id);
             card.querySelector('[data-profile-id]').onclick = (e) => { e.stopPropagation(); navigateTo('profile-view', e.target.dataset.profileId); };
             return card;
@@ -1127,7 +1150,7 @@ JSON 스키마에 맞춰 답변해주세요.
 
             const loadMoreBtn = document.getElementById('load-more-btn');
             if (loadMoreBtn) {
-                loadMoreBtn.innerHTML = `<div class="loader-small mx-auto"></div>`;
+                loadMoreBtn.textContent = '불러오는 중...';
                 loadMoreBtn.disabled = true;
             }
 
@@ -1172,7 +1195,7 @@ JSON 스키마에 맞춰 답변해주세요.
         }
         
         window.renderDetailView = async function(characterId) {
-            detailViewContainer.innerHTML = `<div class="flex justify-center items-center h-64"><div class="loader"></div></div>`;
+            detailViewContainer.innerHTML = '';
             const currentId = Number(characterId);
             detailViewContainer.dataset.id = currentId;
             
@@ -1324,10 +1347,14 @@ JSON 스키마에 맞춰 답변해주세요.
         function createBattleSelectionCard(char) {
             const creatorName = char.profile?.nickname || char.profile?.email?.split('@')[0] || 'Unknown';
             const recordText = char.record ? `${char.record.wins || 0}승 ${char.record.losses || 0}패` : '전적 없음';
+            const level = char.level || 0;
             return `
                 <div class="pokedex-card rounded-lg shadow p-4 card-border-${char.rarity}">
                     <div class="flex flex-col sm:flex-row gap-4">
-                        <img src="${char.image_url}?width=128&quality=80" alt="${char.name}" class="w-full sm:w-24 h-24 object-cover rounded-lg" loading="lazy" onerror="this.onerror=null;this.src='https://placehold.co/96x96/e0e0e0/757575?text=X';">
+                        <div class="relative w-full sm:w-24 h-24 bg-gray-700 rounded-lg">
+                            <div class="level-display">LV.${level}</div>
+                            <img src="${char.image_url}?width=128&quality=80" alt="${char.name}" class="w-full h-full object-cover rounded-lg" loading="lazy" onerror="this.onerror=null;this.src='https://placehold.co/96x96/e0e0e0/757575?text=X';">
+                        </div>
                         <div class="flex-1">
                             <h3 class="font-bold text-lg">${char.name}</h3>
                             <div class="flex items-center gap-2 my-1">
@@ -1339,6 +1366,7 @@ JSON 스키마에 맞춰 답변해주세요.
                             </div>
                             <p class="text-xs text-gray-400">랭크: ${char.rank_points || 1000} RP</p>
                             <p class="text-xs text-gray-400 mt-1">전적: ${recordText}</p>
+                            <p class="text-xs text-gray-400 mt-1">소환사: ${creatorName}</p>
                         </div>
                     </div>
                 </div>
@@ -1348,7 +1376,7 @@ JSON 스키마에 맞춰 답변해주세요.
         window.renderBattleSelectionView = async function() {
             if (!currentUser) { navigateTo('auth-view'); return; }
             
-            battleSelectionViewContainer.innerHTML = `<div class="flex justify-center items-center h-64"><div class="loader"></div></div>`;
+            battleSelectionViewContainer.innerHTML = '';
 
             const { data: allCharsForBattle, error } = await supabaseClient.from('battle_characters')
                 .select('*, profile:battle_profiles(id, nickname, email), record:battle_records(wins, losses)');
@@ -1435,24 +1463,36 @@ JSON 스키마에 맞춰 답변해주세요.
                 <canvas id="battle-canvas"></canvas>
                 <div class="battle-ui-overlay flex flex-col justify-between min-h-screen p-4 pb-40 text-white">
                     <!-- Opponent UI -->
-                    <div class="flex justify-end items-center gap-4">
+                    <div class="flex justify-end items-start gap-4">
                         <div class="bg-gray-800/70 p-3 rounded-lg w-64 text-right">
                             <p class="font-bold">${opponentChar.name}</p>
                             <p class="text-xs text-gray-400">by ${opponentCreatorName}</p>
                             <div class="w-full bg-gray-600 rounded-full h-4 mt-1"><div id="opponent-hp-bar" class="hp-bar-inner bg-green-500 h-4 rounded-full" style="width: 100%"></div></div>
                             <p id="opponent-hp-text" class="text-sm mt-1">${opponentChar.stats.hp} / ${opponentChar.stats.hp}</p>
+                            <div id="opponent-ability" class="text-xs mt-1 cursor-help" title="${MASTER_ABILITY_LIST[opponentChar.ability?.id]?.text || ''}">
+                                <b>특성:</b> ${opponentChar.ability?.name || '없음'} ℹ️
+                            </div>
+                            <div id="opponent-hidden-ability" class="text-xs mt-1 cursor-help" title="${MASTER_ABILITY_LIST[opponentChar.hiddenAbility?.id]?.text || ''}">
+                                <b>숨겨진 특성:</b> ${opponentChar.hiddenAbility?.name || '없음'} ℹ️
+                            </div>
                             <div class="battle-moves-grid mt-2">
                                 ${opponentChar.moves.map((move, i) => `<div id="opponent-move-${i}" data-move-id="${move.moveId}" class="battle-move-item">${move.name}</div>`).join('')}
                             </div>
                         </div>
                     </div>
                     <!-- Player UI -->
-                    <div class="flex justify-start items-center gap-4">
+                    <div class="flex justify-start items-end gap-4">
                         <div class="bg-gray-800/70 p-3 rounded-lg w-64">
                             <p class="font-bold">${playerChar.name}</p>
                             <p class="text-xs text-gray-400">by ${playerCreatorName}</p>
                             <div class="w-full bg-gray-600 rounded-full h-4 mt-1"><div id="player-hp-bar" class="hp-bar-inner bg-green-500 h-4 rounded-full" style="width: 100%"></div></div>
                             <p id="player-hp-text" class="text-sm mt-1">${playerChar.stats.hp} / ${playerChar.stats.hp}</p>
+                             <div id="player-ability" class="text-xs mt-1 cursor-help" title="${MASTER_ABILITY_LIST[playerChar.ability?.id]?.text || ''}">
+                                <b>특성:</b> ${playerChar.ability?.name || '없음'} ℹ️
+                            </div>
+                            <div id="player-hidden-ability" class="text-xs mt-1 cursor-help" title="${MASTER_ABILITY_LIST[playerChar.hiddenAbility?.id]?.text || ''}">
+                                <b>숨겨진 특성:</b> ${playerChar.hiddenAbility?.name || '없음'} ℹ️
+                            </div>
                             <div class="battle-moves-grid mt-2">
                                 ${playerChar.moves.map((move, i) => `<div id="player-move-${i}" data-move-id="${move.moveId}" class="battle-move-item">${move.name}</div>`).join('')}
                             </div>
@@ -1479,6 +1519,7 @@ JSON 스키마에 맞춰 답변해주세요.
             
             // Characters
             let playerSprite, opponentSprite;
+            let playerBorder, opponentBorder;
             const playerImgUrl = `${playerChar.image_url}?width=512&quality=85`;
             const opponentImgUrl = `${opponentChar.image_url}?width=512&quality=85`;
 
@@ -1487,6 +1528,17 @@ JSON 스키마에 맞춰 답변해주세요.
                 const geometry = new THREE.PlaneGeometry(2 * aspect, 2);
                 const material = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
                 playerSprite = new THREE.Mesh(geometry, material);
+
+                const highRarities = ['전설', '고대', '신화'];
+                if (highRarities.includes(playerChar.rarity)) {
+                    const borderColor = playerChar.rarity === '전설' ? 0xFFD700 : playerChar.rarity === '고대' ? 0x4DB6AC : 0xFF7043;
+                    const borderMaterial = new THREE.MeshBasicMaterial({ color: borderColor, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending });
+                    const borderGeometry = new THREE.PlaneGeometry(geometry.parameters.width * 1.1, geometry.parameters.height * 1.1);
+                    playerBorder = new THREE.Mesh(borderGeometry, borderMaterial);
+                    playerBorder.position.z = -0.01; // Place it just behind
+                    playerSprite.add(playerBorder);
+                }
+
                 scene.add(playerSprite);
                 onAssetLoad();
             }, undefined, () => onAssetError('player'));
@@ -1496,6 +1548,17 @@ JSON 스키마에 맞춰 답변해주세요.
                 const geometry = new THREE.PlaneGeometry(2 * aspect, 2);
                 const material = new THREE.MeshBasicMaterial({ map: tex, transparent: true });
                 opponentSprite = new THREE.Mesh(geometry, material);
+
+                const highRarities = ['전설', '고대', '신화'];
+                if (highRarities.includes(opponentChar.rarity)) {
+                    const borderColor = opponentChar.rarity === '전설' ? 0xFFD700 : opponentChar.rarity === '고대' ? 0x4DB6AC : 0xFF7043;
+                    const borderMaterial = new THREE.MeshBasicMaterial({ color: borderColor, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending });
+                    const borderGeometry = new THREE.PlaneGeometry(geometry.parameters.width * 1.1, geometry.parameters.height * 1.1);
+                    opponentBorder = new THREE.Mesh(borderGeometry, borderMaterial);
+                    opponentBorder.position.z = -0.01; // Place it just behind
+                    opponentSprite.add(opponentBorder);
+                }
+
                 scene.add(opponentSprite);
                 onAssetLoad();
             }, undefined, () => onAssetError('opponent'));
@@ -1516,9 +1579,20 @@ JSON 스키마에 맞춰 답변해주세요.
             function animate() {
                 battleAnimationId = requestAnimationFrame(animate);
                 const elapsedTime = clock.getElapsedTime();
+                
                 // Idle "breathing" animation
                 if (playerSprite) playerSprite.position.y = -1 + Math.sin(elapsedTime * 2) * 0.1;
                 if (opponentSprite) opponentSprite.position.y = 1 + Math.sin(elapsedTime * 2 + 1) * 0.1;
+
+                // Rarity border pulsation
+                const pulse = 1 + Math.sin(elapsedTime * 4) * 0.05; // Pulsates between 0.95 and 1.05
+                if (playerBorder) {
+                    playerBorder.scale.set(pulse, pulse, 1);
+                }
+                if (opponentBorder) {
+                    opponentBorder.scale.set(pulse, pulse, 1);
+                }
+
                 renderer.render(scene, camera);
             }
             animate();
@@ -1534,20 +1608,22 @@ JSON 스키마에 맞춰 답변해주세요.
 
             // --- Battle Logic (Starts Here) ---
             const battleLog = document.getElementById('battle-log');
+            let isBattleOver = false;
             
-            // BUG FIX: Initialize all required battle status properties
-            const initBattleStatus = (char) => ({
-                hp: char.stats.hp,
-                shield: 0,
-                status: null,
-                dots: [],
-                buffs: [],
-                debuffs: [],
-                fatigue: 1.0, // Starts at 100% effectiveness for heal/shield
-                momentum: 1.0, // Starts at 100% effectiveness for other moves
-                stat_stages: { attack: 1, defense: 1, sp_atk: 1, sp_def: 1, speed: 1 },
-                ability: char.ability,
-            });
+            const initBattleStatus = (char) => {
+                const useHiddenAbility = Math.random() < 0.2; // 20% chance to use hidden ability
+                const chosenAbility = useHiddenAbility ? char.hiddenAbility : char.ability;
+                log(`<span class="log-ability">${char.name}의 특성은 「${chosenAbility.name}」!</span>`);
+
+                return {
+                    hp: char.stats.hp,
+                    shield: 0,
+                    status: null,
+                    dots: [],
+                    stat_stages: { attack: 0, defense: 0, sp_atk: 0, sp_def: 0, speed: 0 },
+                    ability: chosenAbility,
+                };
+            };
 
             playerChar.battleStatus = initBattleStatus(playerChar);
             opponentChar.battleStatus = initBattleStatus(opponentChar);
@@ -1586,20 +1662,23 @@ JSON 스키마에 맞춰 답변해주세요.
             }
             
             function applyStartOfBattleAbilities() {
-                if (playerChar.ability?.id === 'INTIMIDATE') {
-                    log(`<span class="log-ability">${playerChar.name}의 특성 「${playerChar.ability.name}」!</span>`);
+                if (playerChar.battleStatus.ability?.id === 'INTIMIDATE') {
+                    log(`<span class="log-ability">${playerChar.name}의 특성 「${playerChar.battleStatus.ability.name}」!</span>`);
                     log(`<span class="log-debuff">${opponentChar.name}의 공격이 하락했다!</span>`);
                     applyStatChange('opponent', 'attack', -1);
                 }
-                if (opponentChar.ability?.id === 'INTIMIDATE') {
-                    log(`<span class="log-ability">${opponentChar.name}의 특성 「${opponentChar.ability.name}」!</span>`);
+                if (opponentChar.battleStatus.ability?.id === 'INTIMIDATE') {
+                    log(`<span class="log-ability">${opponentChar.name}의 특성 「${opponentChar.battleStatus.ability.name}」!</span>`);
                     log(`<span class="log-debuff">${playerChar.name}의 공격이 하락했다!</span>`);
                     applyStatChange('player', 'attack', -1);
                 }
             }
 
             async function battleLoop() {
+                if (isBattleOver) return;
+
                 if (playerChar.battleStatus.hp <= 0 || opponentChar.battleStatus.hp <= 0) {
+                    isBattleOver = true;
                     cancelAnimationFrame(battleAnimationId); // Stop animation
                     window.removeEventListener('resize', onWindowResize);
                     const winner = playerChar.battleStatus.hp > 0 ? playerChar : opponentChar;
@@ -1654,8 +1733,8 @@ JSON 스키마에 맞춰 답변해주세요.
                 if (playerPriority !== opponentPriority) {
                     firstAttacker = playerPriority > opponentPriority ? 'player' : 'opponent';
                 } else {
-                    const playerSpeed = playerChar.stats.speed * playerChar.battleStatus.stat_stages.speed;
-                    const opponentSpeed = opponentChar.stats.speed * opponentChar.battleStatus.stat_stages.speed;
+                    const playerSpeed = playerChar.stats.speed * getStatMultiplier(playerChar.battleStatus.stat_stages.speed);
+                    const opponentSpeed = opponentChar.stats.speed * getStatMultiplier(opponentChar.battleStatus.stat_stages.speed);
                     firstAttacker = playerSpeed >= opponentSpeed ? 'player' : 'opponent';
                 }
                 
@@ -1681,7 +1760,6 @@ JSON 스키마에 맞춰 답변해주세요.
                  return new Promise(async (resolve) => {
                     const masterMove = MASTER_SKILL_LIST[move.moveId];
 
-                    // --- NEW ERROR GUARD ---
                     if (!masterMove) {
                         log(`<span class="log-debuff">${attackerType === 'player' ? playerChar.name : opponentChar.name}이(가) 알 수 없는 기술을 사용하려다 실패했다!</span>`);
                         return resolve();
@@ -1714,96 +1792,90 @@ JSON 스키마에 맞춰 답변해주세요.
                     // Attack Animation
                     const originalPos = attackerSprite.position.clone();
                     const targetPos = defenderSprite.position.clone();
-                    const direction = new THREE.Vector3().subVectors(targetPos, originalPos).normalize();
-                    attackerSprite.position.add(direction.multiplyScalar(1.5));
                     
-                    playHitSound();
-                    await new Promise(r => setTimeout(r, 300));
-                    attackerSprite.position.copy(originalPos); // Return to original position
-                    
-                    // Hit Animation
-                    const originalColor = defenderSprite.material.color.getHex();
-                    defenderSprite.material.color.setHex(0xffffff);
-                    
-                    const isDesperate = attacker.battleStatus.hp / attacker.stats.hp <= 0.25;
-                    if (isDesperate) log(`<span class="log-desperate">${attacker.name}의 궁지(Desperate) 상태 발동!</span>`);
+                    gsap.to(attackerSprite.position, {
+                        x: targetPos.x,
+                        y: targetPos.y,
+                        duration: 0.2,
+                        yoyo: true,
+                        repeat: 1,
+                        onComplete: async () => {
+                            // Hit Animation
+                            gsap.to(defenderSprite.material, { opacity: 0.5, duration: 0.1, yoyo: true, repeat: 1 });
+                            
+                            const isDesperate = attacker.battleStatus.hp / attacker.stats.hp <= 0.25;
+                            if (isDesperate) log(`<span class="log-desperate">${attacker.name}의 궁지(Desperate) 상태 발동!</span>`);
 
-                    // --- FATIGUE & MOMENTUM SYSTEM ---
-                    if (masterMove.type === 'heal' || masterMove.type === 'shield') {
-                        attacker.battleStatus.fatigue *= 0.8; // Effectiveness decreases by 20% each use
-                        log(`<span class="log-debuff">${attacker.name}이(가) 지쳐서 회복/보호막 효과가 감소했다!</span>`);
-                    } else {
-                        attacker.battleStatus.momentum += 0.05; // Power increases by 5% each turn
-                    }
-
-                    // Apply effects...
-                    switch(masterMove.type) {
-                        case 'damage':
-                            const { damage, isCritical, effectiveness } = calculateDamage(attacker, defender, move, isDesperate);
-                            defender.battleStatus.hp = Math.max(0, defender.battleStatus.hp - damage);
-                            logDamage(damage, isCritical, effectiveness);
-                            if (masterMove.recoil) {
-                                const recoilDamage = Math.floor(damage * masterMove.recoil);
-                                attacker.battleStatus.hp = Math.max(0, attacker.battleStatus.hp - recoilDamage);
-                                log(`<span class="log-damage">${attacker.name}은(는) 반동 데미지를 ${recoilDamage} 입었다!</span>`);
+                            // Apply effects...
+                            switch(masterMove.type) {
+                                case 'damage':
+                                    const { damage, isCritical, effectiveness } = calculateDamage(attacker, defender, move, isDesperate);
+                                    defender.battleStatus.hp = Math.max(0, defender.battleStatus.hp - damage);
+                                    logDamage(damage, isCritical, effectiveness);
+                                    showDamageNumber(defenderSprite, damage, isCritical);
+                                    if (masterMove.recoil) {
+                                        const recoilDamage = Math.floor(damage * masterMove.recoil);
+                                        attacker.battleStatus.hp = Math.max(0, attacker.battleStatus.hp - recoilDamage);
+                                        log(`<span class="log-damage">${attacker.name}은(는) 반동 데미지를 ${recoilDamage} 입었다!</span>`);
+                                        showDamageNumber(attackerSprite, recoilDamage, false);
+                                    }
+                                    if (masterMove.selfDebuff) {
+                                        applyStatChange(attackerType, masterMove.selfDebuff.stat, masterMove.selfDebuff.amount);
+                                        log(`<span class="log-debuff">${attacker.name}의 ${masterMove.selfDebuff.stat}이(가) 크게 하락했다!</span>`);
+                                    }
+                                    break;
+                                case 'heal':
+                                    const healAmount = Math.floor(attacker.stats.hp * masterMove.power);
+                                    attacker.battleStatus.hp = Math.min(attacker.stats.hp, attacker.battleStatus.hp + healAmount);
+                                    log(`<span class="log-heal">${attacker.name}은(는) HP를 ${healAmount} 회복했다!</span>`);
+                                    break;
+                                case 'buff':
+                                    applyStatChange(attackerType, masterMove.stat, masterMove.amount);
+                                    log(`<span class="log-buff">${attacker.name}의 ${masterMove.stat} 능력치가 상승했다!</span>`);
+                                    break;
+                                case 'debuff':
+                                    applyStatChange(defenderType, masterMove.stat, masterMove.amount);
+                                    log(`<span class="log-debuff">${defender.name}의 ${masterMove.stat} 능력치가 하락했다!</span>`);
+                                    break;
+                                case 'status':
+                                    if (Math.random() < masterMove.chance && !defender.battleStatus.status) {
+                                        defender.battleStatus.status = { type: masterMove.effect };
+                                        log(`<span class="log-status-${masterMove.effect}">${defender.name}은(는) ${masterMove.effect} 상태가 되었다!</span>`);
+                                        updateSpriteEffect(defenderSprite, masterMove.effect);
+                                    }
+                                    break;
+                                case 'dot':
+                                     defender.battleStatus.dots.push({ effect: masterMove.effect, damage: masterMove.damage, turns: masterMove.turns });
+                                     log(`<span class="log-status-${masterMove.effect}">${defender.name}은(는) 지속 데미지를 입기 시작했다!</span>`);
+                                     updateSpriteEffect(defenderSprite, masterMove.effect);
+                                     break;
+                                case 'shield':
+                                     attacker.battleStatus.shield += Math.floor(attacker.stats.hp * masterMove.amount);
+                                     log(`<span class="log-shield">${attacker.name}에게 보호막이 생겼다!</span>`);
+                                     break;
                             }
-                            if (masterMove.selfDebuff) {
-                                applyStatChange(attackerType, masterMove.selfDebuff.stat, -1, true);
-                                log(`<span class="log-debuff">${attacker.name}의 ${masterMove.selfDebuff.stat}이(가) 크게 하락했다!</span>`);
-                            }
-                            break;
-                        case 'heal':
-                            const healAmount = Math.floor(attacker.stats.hp * masterMove.power * attacker.battleStatus.fatigue);
-                            attacker.battleStatus.hp = Math.min(attacker.stats.hp, attacker.battleStatus.hp + healAmount);
-                            log(`<span class="log-heal">${attacker.name}은(는) HP를 ${healAmount} 회복했다!</span>`);
-                            break;
-                        case 'buff':
-                            applyStatChange(attackerType, masterMove.stat, 1);
-                            log(`<span class="log-buff">${attacker.name}의 ${masterMove.stat} 능력치가 상승했다!</span>`);
-                            break;
-                        case 'debuff':
-                            applyStatChange(defenderType, masterMove.stat, -1);
-                            log(`<span class="log-debuff">${defender.name}의 ${masterMove.stat} 능력치가 하락했다!</span>`);
-                            break;
-                        case 'status':
-                            if (Math.random() < masterMove.chance && !defender.battleStatus.status) {
-                                defender.battleStatus.status = { type: masterMove.effect };
-                                log(`<span class="log-status-${masterMove.effect}">${defender.name}은(는) ${masterMove.effect} 상태가 되었다!</span>`);
-                                updateSpriteEffect(defenderSprite, masterMove.effect);
-                            }
-                            break;
-                        case 'dot':
-                             defender.battleStatus.dots.push({ effect: masterMove.effect, damage: masterMove.damage, turns: masterMove.turns });
-                             log(`<span class="log-status-${masterMove.effect}">${defender.name}은(는) 지속 데미지를 입기 시작했다!</span>`);
-                             updateSpriteEffect(defenderSprite, masterMove.effect);
-                             break;
-                        case 'shield':
-                             attacker.battleStatus.shield += Math.floor(attacker.stats.hp * masterMove.amount * attacker.battleStatus.fatigue);
-                             log(`<span class="log-shield">${attacker.name}에게 보호막이 생겼다!</span>`);
-                             break;
-                    }
-                    updateHPBars();
-                    
-                    await new Promise(r => setTimeout(r, 300));
-                    defenderSprite.material.color.setHex(originalColor); // Revert color
-                    document.getElementById(`${attackerType}-move-${moveIndex}`).classList.remove('skill-use-animation');
-                    
-                    setTimeout(resolve, 500);
+                            updateHPBars();
+                            
+                            document.getElementById(`${attackerType}-move-${moveIndex}`).classList.remove('skill-use-animation');
+                            
+                            setTimeout(resolve, 500);
+                        }
+                    });
                 });
             }
 
             async function processEndOfTurn() {
                 for (const charData of [{char: playerChar, type: 'player', sprite: playerSprite}, {char: opponentChar, type: 'opponent', sprite: opponentSprite}]) {
                     if (charData.char.battleStatus.hp <= 0) continue;
-                    if (charData.char.ability?.id === 'SPEED_BOOST') {
-                        log(`<span class="log-ability">${charData.char.name}의 특성 「${charData.char.ability.name}」!</span>`);
+                    if (charData.char.battleStatus.ability?.id === 'SPEED_BOOST') {
+                        log(`<span class="log-ability">${charData.char.name}의 특성 「${charData.char.battleStatus.ability.name}」!</span>`);
                         applyStatChange(charData.type, 'speed', 1);
                         log(`<span class="log-buff">${charData.char.name}의 속도가 상승했다!</span>`);
                     }
-                    if (charData.char.ability?.id === 'REGENERATOR') {
+                    if (charData.char.battleStatus.ability?.id === 'REGENERATOR') {
                         const healAmount = Math.floor(charData.char.stats.hp / 16);
                         charData.char.battleStatus.hp = Math.min(charData.char.stats.hp, charData.char.battleStatus.hp + healAmount);
-                        log(`<span class="log-ability">${charData.char.name}의 특성 「${charData.char.ability.name}」!</span>`);
+                        log(`<span class="log-ability">${charData.char.name}의 특성 「${charData.char.battleStatus.ability.name}」!</span>`);
                         log(`<span class="log-heal">${charData.char.name}은(는) HP를 ${healAmount} 회복했다.</span>`);
                     }
                     charData.char.battleStatus.dots.forEach(dot => {
@@ -1812,8 +1884,6 @@ JSON 스키마에 맞춰 답변해주세요.
                         log(`<span class="log-status-${dot.effect}">${charData.char.name}은(는) ${dot.effect} 데미지로 ${dotDamage}의 피해를 입었다.</span>`);
                     });
                     const decrement = (effect) => { effect.turns--; return effect.turns > 0; };
-                    charData.char.battleStatus.buffs = charData.char.battleStatus.buffs.filter(decrement);
-                    charData.char.battleStatus.debuffs = charData.char.battleStatus.debuffs.filter(decrement);
                     charData.char.battleStatus.dots = charData.char.battleStatus.dots.filter(decrement);
                     
                     // Update sprite effect if DoT expires
@@ -1843,11 +1913,12 @@ JSON 스키마에 맞춰 답변해주세요.
                 }
             }
             
-            function applyStatChange(targetType, stat, stages, isPermanent = false) {
+            function applyStatChange(targetType, stat, stages) {
                 const target = targetType === 'player' ? playerChar : opponentChar;
-                if(stat === 'attack') target.battleStatus.stat_stages.attack *= (stages > 0 ? 1.5 : 0.75);
-                if(stat === 'defense') target.battleStatus.stat_stages.defense *= (stages > 0 ? 1.5 : 0.75);
-                if(stat === 'speed') target.battleStatus.stat_stages.speed *= (stages > 0 ? 1.5 : 0.75);
+                const statKeys = stat === 'all' ? ['attack', 'defense', 'sp_atk', 'sp_def', 'speed'] : [stat];
+                statKeys.forEach(sKey => {
+                    target.battleStatus.stat_stages[sKey] = Math.max(-6, Math.min(6, target.battleStatus.stat_stages[sKey] + stages));
+                });
             }
 
             function logDamage(damage, isCritical, effectiveness) {
@@ -1884,6 +1955,26 @@ JSON 스키마에 맞춰 답변해주세요.
                 }
             }
             
+            function showDamageNumber(targetSprite, damage, isCritical) {
+                const damageDiv = document.createElement('div');
+                damageDiv.textContent = damage;
+                damageDiv.className = `damage-number ${isCritical ? 'crit' : ''}`;
+                battleEffectsContainer.appendChild(damageDiv);
+
+                const vector = new THREE.Vector3();
+                targetSprite.updateWorldMatrix(true, false);
+                vector.setFromMatrixPosition(targetSprite.matrixWorld);
+                vector.project(camera);
+
+                const x = (vector.x * 0.5 + 0.5) * renderer.domElement.clientWidth;
+                const y = (vector.y * -0.5 + 0.5) * renderer.domElement.clientHeight;
+
+                gsap.fromTo(damageDiv, 
+                    { x: x, y: y, opacity: 1, scale: 0 },
+                    { x: x, y: y - 50, opacity: 0, scale: 1.5, duration: 1.5, ease: "power1.out", onComplete: () => damageDiv.remove() }
+                );
+            }
+
             // Add event listeners for skill modals
             document.querySelectorAll('.battle-move-item').forEach(el => {
                 el.addEventListener('click', () => {
@@ -1907,7 +1998,7 @@ JSON 스키마에 맞춰 답변해주세요.
         };
         
         window.renderRankingView = async function() {
-            rankingViewContainer.innerHTML = `<div class="flex justify-center items-center h-64"><div class="loader"></div></div>`;
+            rankingViewContainer.innerHTML = '';
             const { data, error } = await supabaseClient.from('battle_characters')
                 .select('*, profile:battle_profiles(id, nickname, email)')
                 .order('rank_points', { ascending: false });
@@ -2085,10 +2176,10 @@ JSON 스키마에 맞춰 답변해주세요.
             effect.textContent = text;
             battleEffectsContainer.appendChild(effect);
             
-            // Screen shake is now a visual effect, not tied to the main container
-            document.body.classList.add('screen-shake');
+            // Apply screen shake to the battle arena view
+            battleArenaContainer.classList.add('screen-shake');
             setTimeout(() => {
-                document.body.classList.remove('screen-shake');
+                battleArenaContainer.classList.remove('screen-shake');
             }, 300);
 
 
@@ -2097,7 +2188,7 @@ JSON 스키마에 맞춰 답변해주세요.
             }, 1000);
         }
 
-        // --- NEW: Pokedex Background Animation ---
+        // --- Pokedex Background Animation ---
         function initPokedexBackground() {
             if (pokedexAnimationId) return; // Already running
 
