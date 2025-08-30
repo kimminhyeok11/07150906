@@ -15,38 +15,29 @@
     <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;700;900&display=swap" rel="stylesheet">
     <style>
         /* Base Styles */
-        body { font-family: 'Noto Sans KR', sans-serif; background-color: #2d2d2d; color: #cccccc; }
+        body { font-family: 'Noto Sans KR', sans-serif; background-color: #2d2d2d; color: #cccccc; overflow-x: hidden; }
         .view { display: none; }
         .view.active { display: block; animation: fadeIn 0.5s ease-in-out; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         
         .font-title { font-family: 'Black Han Sans', sans-serif; }
 
-        /* Main Page Background Container */
-        #pokedex-view-background {
-            position: absolute;
+        /* 3D Background Container */
+        #pokedex-3d-background {
+            position: fixed;
             top: 0;
             left: 0;
-            right: 0;
-            height: 700px; 
-            background-image: url('https://byepyjdvhggofjjwsqna.supabase.co/storage/v1/object/public/battle_images/main_bg.webp');
-            background-size: cover;
-            background-position: center top;
-            background-repeat: no-repeat;
+            width: 100vw;
+            height: 100vh;
             z-index: -1;
-            opacity: 0.5;
-            -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
-            mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
         }
+        canvas {
+            display: block;
+        }
+
         #pokedex-view .max-w-7xl {
             position: relative;
             z-index: 1;
-        }
-        /* Mobile background fix */
-        @media (max-width: 768px) {
-            #pokedex-view-background {
-                height: 60vh;
-            }
         }
 
         /* Card Styles */
@@ -97,9 +88,33 @@
         .card-border-에픽 { border-color: #AB47BC; } .card-border-전설 { border-color: #F57F17; }
         .card-border-고대 { border-color: #004D40; } .card-border-신화 { border-color: #BF360C; }
 
+        /* NEW STYLES for Main Header Background */
+        #main-header-background {
+            background-image: url('https://byepyjdvhggofjjwsqna.supabase.co/storage/v1/object/public/battle_images/main_bg.webp');
+            background-size: cover;
+            background-position: center;
+            position: relative;
+        }
+        #main-header-background::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(10, 10, 20, 0.6); /* Dark blueish overlay for better readability */
+            border-radius: inherit;
+            z-index: 1;
+        }
+        #main-header-background > * {
+            position: relative;
+            z-index: 2;
+        }
+        /* END NEW STYLES */
+
         /* Battle Arena Styles */
         #battle-arena-view { position: relative; overflow: hidden; height: 100vh; }
-        #battle-background { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; background-size: cover; background-position: center; }
+        #battle-background { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 0; background-size: cover; background-position: center; transition: filter 0.5s ease; }
         .battle-ui-overlay { position: absolute; top:0; left:0; right:0; bottom:0; z-index: 2; pointer-events: none; }
         .battle-ui-overlay > * { pointer-events: all; }
         
@@ -192,9 +207,12 @@
     <!-- Overlays and Loaders -->
     <div id="modal-container"></div>
     <div id="move-tooltip"></div>
+    <div id="pokedex-3d-background"></div>
+    <div id="toast-container" class="fixed bottom-5 right-5 z-[10001] space-y-2"></div>
+
 
     <!-- Navigation Bar -->
-    <nav class="bg-gray-900 shadow-lg sticky top-0 z-50">
+    <nav class="bg-gray-900/80 backdrop-blur-sm shadow-lg sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
                 <div class="flex items-center">
@@ -231,23 +249,24 @@
 
     <!-- Main Pokedex View -->
     <div id="pokedex-view" class="view">
-        <div id="pokedex-view-background"></div>
         <div class="max-w-7xl mx-auto p-2 sm:p-4">
-            <header class="text-center my-4">
-                <h1 class="font-title text-4xl md:text-5xl text-gray-100">몬배틀 헌터즈</h1>
-                <p class="text-gray-400 mt-1 text-sm">우주 최강의 종족을 가리는 갤럭시 토너먼트!</p>
-                 <div class="mt-3 flex justify-center flex-wrap gap-2">
-                      <button id="go-to-battle-btn" class="bg-[#c99] text-white font-bold py-2 px-3 rounded-lg hover:bg-[#a77] transition-transform transform hover:scale-105 disabled:bg-gray-600 disabled:cursor-not-allowed text-sm">배틀 아레나</button>
-                      <button id="go-to-ranking-btn" class="bg-[#f99157] text-white font-bold py-2 px-3 rounded-lg hover:bg-[#d76e2d] transition-transform transform hover:scale-105 text-sm">랭킹 보기</button>
-                      <button id="show-type-chart-btn" class="bg-[#8abeb7] text-white font-bold py-2 px-3 rounded-lg hover:bg-[#6cc] transition-transform transform hover:scale-105 text-sm">상성표</button>
-                      <button id="show-rarity-table-btn" class="bg-[#c9c] text-white font-bold py-2 px-3 rounded-lg hover:bg-[#a7a] transition-transform transform hover:scale-105 text-sm">등급표</button>
-                 </div>
-            </header>
+             <div id="main-header-background" class="relative rounded-2xl shadow-lg overflow-hidden mb-6">
+                <header class="text-center py-12 px-4">
+                    <h1 class="font-title text-4xl md:text-5xl text-gray-100">몬배틀 헌터즈</h1>
+                    <p class="text-gray-300 mt-1 text-sm">우주 최강의 종족을 가리는 갤럭시 토너먼트!</p>
+                    <div class="mt-4 flex justify-center flex-wrap gap-2">
+                        <button id="go-to-battle-btn" class="bg-[#c99] text-white font-bold py-2 px-3 rounded-lg hover:bg-[#a77] transition-transform transform hover:scale-105 disabled:bg-gray-600 disabled:cursor-not-allowed text-sm">배틀 아레나</button>
+                        <button id="go-to-ranking-btn" class="bg-[#f99157] text-white font-bold py-2 px-3 rounded-lg hover:bg-[#d76e2d] transition-transform transform hover:scale-105 text-sm">랭킹 보기</button>
+                        <button id="show-type-chart-btn" class="bg-[#8abeb7] text-white font-bold py-2 px-3 rounded-lg hover:bg-[#6cc] transition-transform transform hover:scale-105 text-sm">상성표</button>
+                        <button id="show-rarity-table-btn" class="bg-[#c9c] text-white font-bold py-2 px-3 rounded-lg hover:bg-[#a7a] transition-transform transform hover:scale-105 text-sm">등급표</button>
+                    </div>
+                </header>
 
-            <!-- Ranking Podium -->
-            <div id="ranking-podium-container" class="mb-6">
-                <h2 class="font-title text-2xl text-center mb-2 text-gray-200">명예의 전당</h2>
-                <div id="ranking-podium-view" class="podium"></div>
+                <!-- Ranking Podium -->
+                <div id="ranking-podium-container" class="pb-12 px-4">
+                    <h2 class="font-title text-2xl text-center mb-2 text-gray-200">명예의 전당</h2>
+                    <div id="ranking-podium-view" class="podium"></div>
+                </div>
             </div>
 
             <div id="character-creation-section" class="bg-gray-800/80 backdrop-blur-sm p-4 rounded-2xl shadow-lg mb-4">
@@ -286,6 +305,7 @@
     <div id="profile-view" class="view"></div>
     <div id="admin-view" class="view"></div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script type="module">
         // --- Supabase Client Setup ---
         const { createClient } = supabase;
@@ -337,7 +357,9 @@
         let allProfiles = [];
         let characterSubscription = null;
         let activeFilter = 'all';
+        let autoBattleInterval = null;
         let isAutoBattleRunning = false;
+        let sceneInitialized = false;
 
         const battleBackgrounds = [
             'https://byepyjdvhggofjjwsqna.supabase.co/storage/v1/object/public/battle_images/arion_ground.webp',
@@ -403,7 +425,7 @@
 
         // --- Navigation & UI Helpers ---
         function navigateTo(viewId, ...args) {
-            isAutoBattleRunning = false; // Stop auto battle on navigation
+            isAutoBattleRunning = false; // Stop any ongoing auto-battle loops
             views.forEach(v => v.classList.remove('active'));
             const targetView = document.getElementById(viewId);
             if (targetView) {
@@ -422,7 +444,7 @@
             btnText.textContent = isLoading ? '생성 중...' : '크리처 소환! (1 크레딧)';
         }
 
-        function showModal(title, content, onConfirm) {
+        function showModal(title, content, onConfirm, options = {}) {
             const modalHTML = `
                 <div id="modal-overlay" class="modal-overlay">
                     <div class="modal-content w-full max-w-lg">
@@ -438,7 +460,11 @@
             modalContainer.innerHTML = modalHTML;
             document.getElementById('close-modal-btn').onclick = closeModal;
             const overlay = document.getElementById('modal-overlay');
-            overlay.onclick = (e) => { if (e.target === overlay) closeModal(); };
+            overlay.onclick = (e) => { 
+                if (e.target === overlay && options.closeOnOverlayClick !== false) {
+                     closeModal();
+                }
+            };
             if (onConfirm) {
                 document.getElementById('confirm-btn').onclick = () => { onConfirm(); closeModal(); };
                 document.getElementById('cancel-btn').onclick = closeModal;
@@ -447,6 +473,25 @@
 
         function closeModal() { modalContainer.innerHTML = ''; }
         window.closeModal = closeModal;
+        
+        function showToast(message, type = 'success') {
+            const toastContainer = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const bgColor = type === 'success' ? 'bg-green-600' : 'bg-yellow-600';
+            toast.className = `p-3 rounded-lg shadow-xl text-white ${bgColor} transform transition-all duration-300 ease-in-out translate-x-full opacity-0`;
+            toast.textContent = message;
+            toastContainer.appendChild(toast);
+
+            // Animate in
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-x-full', 'opacity-0');
+            });
+
+            setTimeout(() => {
+                toast.classList.add('translate-x-full', 'opacity-0');
+                toast.addEventListener('transitionend', () => toast.remove());
+            }, 4000);
+        }
 
         function showTypeChartModal() {
             let chartHtml = '<div class="type-chart-grid">';
@@ -538,22 +583,15 @@
             const { eventType, new: newRecord, old: oldRecord, table } = payload;
             let id = eventType === 'DELETE' ? oldRecord.id : newRecord.id;
 
-            if (table === 'battle_characters') {
-                const index = allCharacters.findIndex(c => c.id === id);
-
-                if (eventType === 'INSERT') {
-                    const newChar = { ...newRecord.data, id: newRecord.id, created_at: newRecord.created_at, creator_id: newRecord.creator_id, rank_points: newRecord.rank_points, level: newRecord.level, experience: newRecord.experience, universe: newRecord.universe, image_url: newRecord.image_url, profile: allProfiles.find(p => p.id === newRecord.creator_id) };
-                    allCharacters.unshift(newChar);
-                } else if (eventType === 'UPDATE') {
-                    if (index > -1) {
-                        const updatedCharacter = { ...newRecord.data, id: newRecord.id, created_at: newRecord.created_at, creator_id: newRecord.creator_id, rank_points: newRecord.rank_points, level: newRecord.level, experience: newRecord.experience, universe: newRecord.universe, image_url: newRecord.image_url, profile: allProfiles.find(p => p.id === newRecord.creator_id) };
-                        allCharacters[index] = updatedCharacter;
-                    }
-                } else if (eventType === 'DELETE') {
-                    if (index > -1) {
-                        allCharacters.splice(index, 1);
-                    }
-                }
+            if (table === 'battle_characters' || table === 'battle_records') {
+                 // Force a refresh of the main view data if a battle record or character changes
+                const activeView = document.querySelector('.view.active');
+                 if (activeView && (activeView.id === 'pokedex-view' || activeView.id === 'detail-view' || activeView.id === 'profile-view')) {
+                     // Invalidate local cache and reload
+                     allCharacters = [];
+                     currentPage = 0;
+                     loadMoreCharacters();
+                 }
             } else if (table === 'battle_profiles') {
                 const index = allProfiles.findIndex(p => p.id === id);
                 if (eventType === 'INSERT' && index === -1) {
@@ -567,8 +605,8 @@
             if (activeView && activeView.id !== 'battle-arena-view') {
                 const renderFunctionName = `render${activeView.id.charAt(0).toUpperCase() + activeView.id.slice(1).replace(/-./g, x=>x[1].toUpperCase())}`;
                  if (window[renderFunctionName] && typeof window[renderFunctionName] === 'function') {
-                       const currentId = activeView.dataset.id;
-                       window[renderFunctionName](currentId);
+                      const currentId = activeView.dataset.id;
+                      window[renderFunctionName](currentId);
                  }
             }
             if (document.getElementById('pokedex-view').classList.contains('active')) {
@@ -601,8 +639,12 @@
                         if(data) allProfiles = data;
                         currentProfile = allProfiles.find(p => p.id === currentUser.id);
                     }
+                    if (currentProfile?.auto_battle_enabled) {
+                        startAutoBattleCheck();
+                    }
                 } else {
                     currentProfile = null;
+                    stopAutoBattleCheck();
                 }
                 
                 updateUIBasedOnAuthState();
@@ -650,12 +692,13 @@
                 authError.textContent = `로그인 오류: ${error.message}`;
             } else {
                 authError.textContent = '';
-                // The onAuthStateChange listener will handle navigation
+                // The onAuthStateChange listener will handle navigation and auto-battle start
             }
         }
 
         async function handleLogout() {
             await supabaseClient.auth.signOut();
+            stopAutoBattleCheck();
         }
         
         // --- Character Generation ---
@@ -736,7 +779,7 @@
                 console.error("Character Generation Error:", error);
                  let displayError = error.message;
                 if (error.message.includes("security policy")) {
-                    displayError = `파일 저장소(Storage)의 보안 정책(RLS)이 설정되지 않았습니다. Supabase 대시보드에서 'battle_images' 버킷에 대한 SELECT, INSERT, DELETE 정책을 올바르게 설정해주세요.`;
+                     displayError = `파일 저장소(Storage)의 보안 정책(RLS)이 설정되지 않았습니다. Supabase 대시보드에서 'battle_images' 버킷에 대한 SELECT, INSERT, DELETE 정책을 올바르게 설정해주세요.`;
                 }
                 showModal('생성 실패', `<p>생성 중 오류가 발생했습니다. 크레딧은 차감되지 않았습니다. <br>오류: ${displayError}</p>`);
                 errorMessage.textContent = `⚠️ 생성 중 오류가 발생했습니다.`;
@@ -824,7 +867,7 @@ ${abilityListForPrompt}
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
             const result = await callApiWithRetry(apiUrl, payload);
              if (result.candidates?.[0]?.content?.parts?.[0]?.text) {
-                return JSON.parse(result.candidates[0].content.parts[0].text);
+                 return JSON.parse(result.candidates[0].content.parts[0].text);
             }
             throw new Error("Character data generation failed or returned in an unexpected format.");
         }
@@ -835,7 +878,6 @@ ${abilityListForPrompt}
 
         function calculateDamage(attacker, defender, move, turn) {
             const masterMove = MASTER_SKILL_LIST[move.moveId] || {};
-            // For legacy characters without PP/Accuracy
             const accuracy = masterMove.accuracy === undefined ? 100 : masterMove.accuracy;
             if (Math.random() * 100 > accuracy) return { damage: 0, isCritical: false, effectiveness: 1, missed: true };
 
@@ -869,14 +911,10 @@ ${abilityListForPrompt}
                 stab = attacker.battleStatus.ability?.id === 'ADAPTABILITY' ? 2 : 1.5;
             }
             damage *= effectiveness * stab;
-            
             damage *= (1 + (turn - 1) * 0.05);
-
             const isCritical = Math.random() < (attacker.battleStatus.isDesperate ? 0.25 : 0.0625);
             if (isCritical) damage *= 1.5;
-            
             let finalDamage = Math.floor(damage * (Math.random() * 0.15 + 0.85));
-
             return { damage: finalDamage, isCritical, effectiveness, missed: false };
         }
 
@@ -887,20 +925,66 @@ ${abilityListForPrompt}
             const winnerExpected = 1 / (1 + 10 ** ((loserRank - winnerRank) / 400));
             const newWinnerRank = Math.round(winnerRank + K * (1 - winnerExpected));
             const newLoserRank = Math.max(0, Math.round(loserRank + K * (0 - (1 - winnerExpected))));
-            
             const xpGained = 50 + (loser.level - winner.level) * 5;
 
-            await Promise.all([
-                supabaseClient.rpc('update_battle_record', { char_id: winner.id, is_win: true }),
-                supabaseClient.rpc('update_battle_record', { char_id: loser.id, is_win: false }),
-                supabaseClient.from('battle_characters').update({ rank_points: newWinnerRank }).eq('id', winner.id),
-                supabaseClient.from('battle_characters').update({ rank_points: newLoserRank }).eq('id', loser.id),
-                supabaseClient.rpc('grant_experience_and_level_up', { char_id: winner.id, xp_to_add: Math.max(10, xpGained) })
-            ]);
+            const { error } = await supabaseClient.rpc('process_battle_results', {
+                winner_id: winner.id,
+                loser_id: loser.id,
+                new_winner_rank: newWinnerRank,
+                new_loser_rank: newLoserRank,
+                xp_to_add: Math.max(10, xpGained)
+            });
 
-            return { rankChange: newWinnerRank - winnerRank, newWinnerRank, newLoserRank };
+            if (error) {
+                console.error("Error processing battle results:", error);
+                showToast("전투 결과를 저장하는 데 실패했습니다.", "error");
+            }
+            return { rankChange: newWinnerRank - winnerRank };
         }
         
+        function chooseSmartMove(attacker, defender) {
+            let moveScores = attacker.moves.map((move, index) => {
+                const masterMove = MASTER_SKILL_LIST[move.moveId] || {};
+                let score = 0;
+
+                if (attacker.battleStatus.pp[index] <= 0) {
+                    return { move, score: -999 };
+                }
+
+                switch (masterMove.type) {
+                    case 'damage':
+                        let { damage, effectiveness } = calculateDamage(attacker, defender, move, 1);
+                        if (damage >= defender.battleStatus.currentHP) score += 1000;
+                        score += damage;
+                        if (effectiveness > 1) score *= 1.5;
+                        if (effectiveness < 1) score *= 0.5;
+                        break;
+                    case 'heal':
+                        const missingHpPercent = 1 - (attacker.battleStatus.currentHP / attacker.battleStatus.maxHP);
+                        if (missingHpPercent > 0.25) score += missingHpPercent * 100;
+                        break;
+                    case 'buff':
+                        if (masterMove.stat === 'all' || attacker.battleStatus.stat_stages[masterMove.stat] < 6) score += 40;
+                        break;
+                    case 'debuff':
+                        if (masterMove.stat === 'all' || defender.battleStatus.stat_stages[masterMove.stat] > -6) score += 40;
+                        break;
+                    case 'status':
+                        if (!defender.battleStatus.status) score += 45;
+                        break;
+                }
+                score += Math.random() * 10;
+                return { move, score };
+            });
+
+            moveScores.sort((a, b) => b.score - a.score);
+            if (moveScores.length > 0 && moveScores[0].score < 0) {
+                 const availableMoves = attacker.moves.filter((_, i) => attacker.battleStatus.pp[i] > 0);
+                 return availableMoves.length > 0 ? availableMoves[0] : attacker.moves[0];
+            }
+            return moveScores[0].move;
+        }
+
         // --- Helper Functions ---
         function base64ToBlob(base64, contentType = '', sliceSize = 512) {
             const byteCharacters = atob(base64.split(',')[1]);
@@ -991,6 +1075,10 @@ ${abilityListForPrompt}
         }
 
         window.renderPokedexView = function() {
+            if (!sceneInitialized) {
+                initPokedex3DBackground(); // 3D background initialization
+                sceneInitialized = true;
+            }
             renderRankingPodium();
             
             pokedexContainer.innerHTML = ''; 
@@ -1022,7 +1110,7 @@ ${abilityListForPrompt}
             const to = from + PAGE_SIZE - 1;
 
             let query = supabaseClient.from('battle_characters')
-                .select('*, profile:battle_profiles(id, nickname, email)', { count: 'exact' })
+                .select('*, profile:battle_profiles(id, nickname, email), record:battle_records(*)', { count: 'exact' })
                 .order('created_at', { ascending: false })
                 .range(from, to);
             
@@ -1037,7 +1125,7 @@ ${abilityListForPrompt}
                 showModal('오류', '캐릭터를 더 불러오는 데 실패했습니다.');
             } else {
                 totalCharacterCount = count;
-                const newCharacters = data.map(c => ({ ...c.data, id: c.id, created_at: c.created_at, creator_id: c.creator_id, rank_points: c.rank_points, image_url: c.image_url, level: c.level, experience: c.experience, universe: c.universe, profile: c.profile }));
+                const newCharacters = data.map(c => ({ ...c.data, id: c.id, created_at: c.created_at, creator_id: c.creator_id, rank_points: c.rank_points, image_url: c.image_url, level: c.level, experience: c.experience, universe: c.universe, profile: c.profile, record: c.record && c.record.length > 0 ? c.record[0] : null }));
                 allCharacters.push(...newCharacters);
                 currentPage++;
                 renderPokedexView();
@@ -1213,7 +1301,7 @@ ${abilityListForPrompt}
             }
             
             const recordsMap = new Map(recordsData.map(r => [r.character_id, r]));
-            const allBattleChars = allBattleCharsData.map(c => ({ ...c.data, id: c.id, creator_id: c.creator_id, rank_points: c.rank_points, image_url: c.image_url, profile: c.profile, level: c.level, record: recordsMap.get(c.id) }));
+            const allBattleChars = allBattleCharsData.map(c => ({ ...c.data, id: c.id, creator_id: c.creator_id, rank_points: c.rank_points, image_url: c.image_url, profile: c.profile, level: c.level, record: recordsMap.get(c.id), universe: c.universe }));
 
             const myCharacters = allBattleChars.filter(c => c.creator_id === currentUser.id);
 
@@ -1256,7 +1344,333 @@ ${abilityListForPrompt}
         };
 
         window.renderBattleArenaView = async function(playerCharId, opponentCharId) {
-            // Battle logic starts here
+            battleArenaContainer.innerHTML = `<div class="text-center p-8"><h2 class="text-2xl font-bold">결전의 장 준비 중...</h2></div>`;
+            
+            const { data, error } = await supabaseClient.from('battle_characters')
+                .select('*, profile:battle_profiles(id, nickname, email)')
+                .in('id', [playerCharId, opponentCharId]);
+
+            if (error || data.length < 2) {
+                battleArenaContainer.innerHTML = `<p class="text-center p-8">배틀 상대를 불러오는 데 실패했습니다.</p>`; return;
+            }
+
+            let playerCharData = data.find(c => c.id === playerCharId);
+            let opponentCharData = data.find(c => c.id === opponentCharId);
+            
+            const battleState = {
+                player: { ...playerCharData.data, id: playerCharData.id, creator_id: playerCharData.creator_id, rank_points: playerCharData.rank_points, image_url: playerCharData.image_url, profile: playerCharData.profile, universe: playerCharData.universe, level: playerCharData.level || 1 },
+                opponent: { ...opponentCharData.data, id: opponentCharData.id, creator_id: opponentCharData.creator_id, rank_points: opponentCharData.rank_points, image_url: opponentCharData.image_url, profile: opponentCharData.profile, universe: opponentCharData.universe, level: opponentCharData.level || 1 },
+                turn: 1,
+                log: [],
+                gameOver: false,
+                isProcessingTurn: false,
+                isAutoBattling: currentUser?.id === playerCharData.creator_id && currentProfile?.auto_battle_enabled,
+            };
+
+            function initializeFighter(fighter) {
+                fighter.battleStatus = {
+                    currentHP: fighter.stats.hp, maxHP: fighter.stats.hp, status: null,
+                    stat_stages: { attack: 0, defense: 0, sp_atk: 0, sp_def: 0, speed: 0 },
+                    pp: fighter.moves.map(m => MASTER_SKILL_LIST[m.moveId]?.pp || 10),
+                    isDesperate: false, shield: 0, comboReady: false, chargingMove: null,
+                    passiveUsed: { 'PASSIVE_CHITINOID': { defense: false, sp_def: false } }, voided: 0,
+                };
+            }
+            initializeFighter(battleState.player);
+            initializeFighter(battleState.opponent);
+            
+            const randomBg = battleBackgrounds[Math.floor(Math.random() * battleBackgrounds.length)];
+
+            battleArenaContainer.innerHTML = `
+                <div id="battle-background" style="background-image: url('${randomBg}')"></div>
+                <div class="battle-ui-overlay p-2 sm:p-4 flex flex-col h-full">
+                    <div id="opponent-ui" class="w-full sm:w-1/2 self-end mb-auto"></div>
+                    <div id="player-ui" class="w-full sm:w-1/2 self-start mt-auto"></div>
+                    <div id="battle-controls" class="w-full md:w-2/3 lg:w-1/2 mx-auto bg-gray-900/80 backdrop-blur-sm rounded-lg p-2 sm:p-3 shadow-2xl border border-gray-700"></div>
+                </div>
+            `;
+            
+            addToLog(`⚔️ ${battleState.player.name} vs ${battleState.opponent.name} 배틀 시작!`);
+
+            if (battleState.isAutoBattling) {
+                autoBattleLoop();
+            } else {
+                updateBattleUI();
+            }
+
+            async function autoBattleLoop() {
+                if (battleState.gameOver || !battleState.isAutoBattling) return;
+                
+                addToLog("🤖 자동 전투 AI가 다음 행동을 결정 중입니다...");
+                updateBattleUI(); 
+                await new Promise(res => setTimeout(res, 2000));
+
+                const playerMove = chooseSmartMove(battleState.player, battleState.opponent);
+                const playerMoveIndex = battleState.player.moves.indexOf(playerMove);
+                await handleTurn(playerMoveIndex); 
+
+                if (!battleState.gameOver) {
+                    autoBattleLoop();
+                }
+            }
+
+            async function handleTurn(playerMoveIndex) {
+                if (battleState.isProcessingTurn || battleState.gameOver) return;
+                battleState.isProcessingTurn = true;
+                updateBattleUI(); 
+
+                const playerMove = battleState.player.moves[playerMoveIndex];
+                const opponentMove = chooseSmartMove(battleState.opponent, battleState.player);
+                
+                const playerMasterMove = MASTER_SKILL_LIST[playerMove.moveId] || {};
+                const opponentMasterMove = MASTER_SKILL_LIST[opponentMove.moveId] || {};
+                
+                let firstAttacker, secondAttacker, firstMove, secondMove;
+                const playerPriority = playerMasterMove.priority || 0;
+                const opponentPriority = opponentMasterMove.priority || 0;
+
+                if (playerPriority > opponentPriority) {
+                    [firstAttacker, secondAttacker, firstMove, secondMove] = [battleState.player, battleState.opponent, playerMove, opponentMove];
+                } else if (opponentPriority > playerPriority) {
+                    [firstAttacker, secondAttacker, firstMove, secondMove] = [battleState.opponent, battleState.player, opponentMove, playerMove];
+                } else {
+                    const playerSpeed = battleState.player.stats.speed * getStatMultiplier(battleState.player.battleStatus.stat_stages.speed);
+                    const opponentSpeed = battleState.opponent.stats.speed * getStatMultiplier(battleState.opponent.battleStatus.stat_stages.speed);
+                    if (playerSpeed >= opponentSpeed) {
+                         [firstAttacker, secondAttacker, firstMove, secondMove] = [battleState.player, battleState.opponent, playerMove, opponentMove];
+                    } else {
+                         [firstAttacker, secondAttacker, firstMove, secondMove] = [battleState.opponent, battleState.player, opponentMove, playerMove];
+                    }
+                }
+                
+                await executeMove(firstAttacker, secondAttacker, firstMove);
+                if (!battleState.gameOver) await executeMove(secondAttacker, firstAttacker, secondMove);
+                if (!battleState.gameOver) await handleEndOfTurnEffects();
+
+                battleState.turn++;
+                battleState.isProcessingTurn = false;
+                if (!battleState.gameOver && !battleState.isAutoBattling) {
+                    updateBattleUI();
+                }
+            }
+
+            async function executeMove(attacker, defender, move) {
+                const moveIndex = attacker.moves.indexOf(move);
+                attacker.battleStatus.pp[moveIndex]--;
+                
+                addToLog(`${attacker.name}의 ${move.name}!`);
+                if (!battleState.isAutoBattling) updateBattleUI();
+                await new Promise(res => setTimeout(res, 800));
+
+                const result = calculateDamage(attacker, defender, move, battleState.turn);
+                if (result.missed) {
+                    addToLog(`공격이 빗나갔다!`);
+                } else {
+                    playHitSound();
+                    defender.battleStatus.currentHP = Math.max(0, defender.battleStatus.currentHP - result.damage);
+                    animateDamage(defender, result.damage);
+                    let logMessage = `${result.damage}의 데미지!`;
+                    if (result.isCritical) { logMessage += ' (급소!)'; playCritSound(); }
+                    if (result.effectiveness > 1) { logMessage += ' (효과가 굉장했다!)'; playSuperEffectiveSound(); }
+                    if (result.effectiveness < 1 && result.effectiveness > 0) logMessage += ' (효과가 별로인 듯하다...)';
+                    if (result.effectiveness === 0) logMessage += ' (효과가 없는 것 같다...)';
+                    addToLog(logMessage);
+                }
+                
+                updateHealthBars();
+                await new Promise(res => setTimeout(res, 800));
+
+                if (defender.battleStatus.currentHP <= 0) endBattle(attacker, defender);
+            }
+            
+            async function handleEndOfTurnEffects() {
+                addToLog(`턴 ${battleState.turn} 종료.`);
+                await new Promise(res => setTimeout(res, 800));
+            }
+            
+            async function endBattle(winner, loser) {
+                battleState.gameOver = true;
+                battleState.isAutoBattling = false; // Stop auto-battle loops
+                addToLog(`${loser.name}은(는) 쓰러졌다!`);
+                addToLog(`${winner.name}의 승리!`);
+                document.getElementById('battle-background').style.filter = 'blur(5px) grayscale(50%)';
+                playVictorySound();
+                
+                const { rankChange } = await updatePostBattleStats(winner, loser);
+
+                const { data: updatedCharsData, error: fetchError } = await supabaseClient
+                    .from('battle_characters')
+                    .select('id, data, level, experience, record:battle_records(wins, losses)')
+                    .in('id', [winner.id, loser.id]);
+
+                const updatedWinner = updatedCharsData.find(c => c.id === winner.id);
+                const oldLevel = winner.level;
+                const newLevel = updatedWinner ? updatedWinner.level : oldLevel;
+                const record = updatedWinner?.record[0] || { wins: (winner.record?.wins || 0) + 1, losses: winner.record?.losses || 0 };
+
+                let levelUpMessage = '';
+                if (newLevel > oldLevel) {
+                    levelUpMessage = `<p class="text-xl font-bold text-cyan-400 mt-2">🎉 레벨 업! (LV.${oldLevel} → LV.${newLevel}) 🎉</p>`;
+                }
+
+                const winnerProfile = allProfiles.find(p => p.id === winner.creator_id);
+                const winnerCreatorName = winnerProfile?.nickname || winnerProfile?.email?.split('@')[0] || 'Unknown';
+                const finalLog = battleState.log.slice().reverse().map(l => `<div>${l}</div>`).join('');
+
+                const modalContent = `
+                    <div class="text-center p-4">
+                        <h3 class="text-3xl font-title text-yellow-300 tracking-wider">VICTORY</h3>
+                        <img src="${winner.image_url}?width=256" alt="${winner.name}" class="w-32 h-32 rounded-full mx-auto my-4 border-4 border-yellow-400 object-cover shadow-lg">
+                        <h4 class="text-2xl font-bold">${winner.name}</h4>
+                        <p class="text-sm text-gray-400">소환사: ${winnerCreatorName}</p>
+                        ${levelUpMessage}
+                        <p class="text-lg font-bold my-2">${record.wins}승 ${record.losses}패</p>
+                        <p class="mt-2">랭크 포인트가 <span class="font-bold ${rankChange >= 0 ? 'text-green-400' : 'text-red-400'}">${rankChange >= 0 ? '+' : ''}${rankChange}</span> 만큼 변동되었습니다.</p>
+                        <div id="battle-log-container" class="hidden h-40 overflow-y-auto bg-black/30 p-2 rounded-md my-4 text-sm text-left border border-gray-600">${finalLog}</div>
+                        <div class="mt-6 flex flex-col sm:flex-row justify-center gap-3">
+                            <button id="view-log-btn" class="bg-gray-600 text-white font-bold py-2 px-4 rounded-lg">전투 기록</button>
+                            <button id="rematch-btn" class="bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg">재대결</button>
+                            <button id="modal-return-home" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">메인으로</button>
+                        </div>
+                    </div>`;
+                showModal('', modalContent, null, { closeOnOverlayClick: false });
+                document.getElementById('close-modal-btn').onclick = () => { navigateTo('pokedex-view'); closeModal(); };
+                document.getElementById('view-log-btn').onclick = () => document.getElementById('battle-log-container').classList.toggle('hidden');
+                document.getElementById('rematch-btn').onclick = () => { closeModal(); navigateTo('battle-arena-view', playerCharId, opponentCharId); };
+                document.getElementById('modal-return-home').onclick = () => { navigateTo('pokedex-view'); closeModal(); };
+            }
+            
+            function updateBattleUI() {
+                if(battleState.gameOver) return;
+                document.getElementById('player-ui').innerHTML = createFighterUI(battleState.player, 'player');
+                document.getElementById('opponent-ui').innerHTML = createFighterUI(battleState.opponent, 'opponent');
+                document.getElementById('battle-controls').innerHTML = createControlsUI();
+                attachMoveListeners();
+            }
+
+            function updateHealthBars() {
+                const playerHpPercent = (battleState.player.battleStatus.currentHP / battleState.player.battleStatus.maxHP) * 100;
+                const playerHpBar = document.querySelector('#player-ui .hp-bar-inner');
+                if (playerHpBar) playerHpBar.style.width = `${playerHpPercent}%`;
+                const playerHpText = document.querySelector('#player-ui .hp-text');
+                if(playerHpText) playerHpText.textContent = `${battleState.player.battleStatus.currentHP} / ${battleState.player.battleStatus.maxHP}`;
+                const opponentHpPercent = (battleState.opponent.battleStatus.currentHP / battleState.opponent.battleStatus.maxHP) * 100;
+                const opponentHpBar = document.querySelector('#opponent-ui .hp-bar-inner');
+                if(opponentHpBar) opponentHpBar.style.width = `${opponentHpPercent}%`;
+                const opponentHpText = document.querySelector('#opponent-ui .hp-text');
+                if(opponentHpText) opponentHpText.textContent = `${battleState.opponent.battleStatus.currentHP} / ${battleState.opponent.battleStatus.maxHP}`;
+            }
+
+            function createFighterUI(fighter, type) {
+                const hpPercent = (fighter.battleStatus.currentHP / fighter.battleStatus.maxHP) * 100;
+                const isPlayer = type === 'player';
+                const desperateClass = fighter.battleStatus.isDesperate ? 'desperate' : '';
+                return `
+                    <div class="battle-character-ui ${desperateClass} bg-gray-900/80 backdrop-blur-sm p-3 rounded-lg shadow-lg border border-gray-700 flex ${isPlayer ? 'flex-row-reverse' : 'flex-row'} items-center gap-4">
+                        <div class="flex-1">
+                            <div class="flex justify-between items-baseline">
+                                <h3 class="font-bold text-lg">${fighter.name}</h3>
+                                <span class="text-sm font-semibold text-yellow-300">Lv.${fighter.level}</span>
+                            </div>
+                            <div class="w-full bg-gray-600 rounded-full h-4 my-1 border-2 border-gray-800">
+                                <div class="hp-bar-inner bg-gradient-to-r from-green-400 to-green-600 h-full rounded-full" style="width: ${hpPercent}%;"></div>
+                            </div>
+                            <p class="hp-text text-sm font-mono text-right">${fighter.battleStatus.currentHP} / ${fighter.battleStatus.maxHP}</p>
+                        </div>
+                        <img src="${fighter.image_url}?width=256&quality=80" alt="${fighter.name}" class="w-24 h-24 object-contain ${isPlayer ? '' : 'transform -scale-x-100'}">
+                    </div>`;
+            }
+
+            function createControlsUI() {
+                return `
+                    <div id="battle-log" class="h-24 overflow-y-auto bg-black/50 p-2 rounded-md mb-2 text-sm border border-gray-700">
+                        ${battleState.log.map(entry => `<div>${entry}</div>`).join('')}
+                    </div>
+                    <div class="battle-moves-grid">
+                        ${battleState.player.moves.map((move, index) => {
+                            const masterMove = MASTER_SKILL_LIST[move.moveId] || {};
+                            const ppLeft = battleState.player.battleStatus.pp[index];
+                            const disabled = ppLeft <= 0 || battleState.isProcessingTurn || battleState.isAutoBattling ? 'disabled' : '';
+                            return `<button class="battle-move-item" data-move-index="${index}" ${disabled}>
+                                        <div class="flex justify-center items-center">
+                                            <span class="type-badge mr-2 type-${Object.keys(typeTranslations).find(key => typeTranslations[key] === move.type) || move.type}">${move.type}</span>
+                                            <span>${move.name}</span>
+                                            <span class="pp-display">(${ppLeft}/${masterMove.pp || '?'})</span>
+                                        </div>
+                                    </button>`;
+                        }).join('')}
+                    </div>
+                `;
+            }
+
+            function attachMoveListeners() {
+                document.querySelectorAll('.battle-move-item').forEach(btn => {
+                    btn.onclick = () => handleTurn(parseInt(btn.dataset.moveIndex));
+                    btn.onmouseenter = (e) => showMoveTooltip(e, parseInt(btn.dataset.moveIndex));
+                    btn.onmouseleave = hideMoveTooltip;
+                });
+            }
+
+            function addToLog(message) {
+                battleState.log.unshift(message);
+                if (battleState.log.length > 20) battleState.log.pop();
+                const logEl = document.getElementById('battle-log');
+                if (logEl) {
+                    logEl.innerHTML = battleState.log.map(entry => `<div>${entry}</div>`).join('');
+                    logEl.scrollTop = 0;
+                }
+            }
+
+            function animateDamage(target, damage) {
+                const uiElement = target === battleState.player ? document.getElementById('player-ui') : document.getElementById('opponent-ui');
+                if (!uiElement) return;
+                const damageText = document.createElement('div');
+                damageText.textContent = `-${damage}`;
+                damageText.className = 'absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-4xl font-bold text-red-500 text-stroke-2 text-stroke-white';
+                damageText.style.zIndex = '10';
+                uiElement.style.position = 'relative';
+                uiElement.appendChild(damageText);
+                
+                anime({
+                    targets: uiElement.querySelector('img'),
+                    keyframes: [ { translateX: -10 }, { translateX: 10 }, { translateX: -5 }, { translateX: 5 }, { translateX: 0 } ],
+                    duration: 500,
+                    easing: 'easeInOutSine'
+                });
+
+                anime({
+                    targets: damageText,
+                    translateY: -50,
+                    opacity: 0,
+                    duration: 1500,
+                    easing: 'easeOutExpo',
+                    complete: () => damageText.remove()
+                });
+            }
+            
+            function showMoveTooltip(event, moveIndex) {
+                 const move = battleState.player.moves[moveIndex];
+                 const masterMove = MASTER_SKILL_LIST[move.moveId] || {};
+                 moveTooltip.style.opacity = '1';
+                 moveTooltip.style.transform = 'translateY(0)';
+                 moveTooltip.style.left = `${event.clientX + 15}px`;
+                 moveTooltip.style.top = `${event.clientY - moveTooltip.offsetHeight - 15}px`;
+                 moveTooltip.innerHTML = `
+                     <h4 class="font-bold text-lg text-white">${move.name}</h4>
+                     <p class="text-sm text-gray-300 mt-1">${move.description}</p>
+                     <div class="mt-3 pt-2 border-t border-gray-600 grid grid-cols-2 gap-1 text-xs">
+                         <span><b>타입:</b> ${move.type}</span>
+                         <span><b>분류:</b> ${masterMove.category || '기타'}</span>
+                         <span><b>위력:</b> ${masterMove.power || '—'}</span>
+                         <span><b>명중:</b> ${masterMove.accuracy || '—'}</span>
+                     </div>
+                 `;
+             }
+             
+            function hideMoveTooltip() {
+                 moveTooltip.style.opacity = '0';
+                 moveTooltip.style.transform = 'translateY(10px)';
+            }
         };
 
         window.renderRankingView = async function() {
@@ -1269,7 +1683,7 @@ ${abilityListForPrompt}
                 rankingViewContainer.innerHTML = `<p class="text-center p-8">랭킹을 불러오는 데 실패했습니다.</p>`;
                 return;
             }
-            const sorted = data.map(c => ({ ...c.data, id: c.id, creator_id: c.creator_id, rank_points: c.rank_points, image_url: c.image_url, profile: c.profile }));
+            const sorted = data.map(c => ({ ...c.data, id: c.id, creator_id: c.creator_id, rank_points: c.rank_points, image_url: c.image_url, profile: c.profile, universe: c.universe }));
             rankingViewContainer.innerHTML = `
                 <div class="max-w-4xl mx-auto p-4">
                     <h2 class="font-title text-4xl text-center mb-8">전체 랭킹</h2>
@@ -1354,28 +1768,33 @@ ${abilityListForPrompt}
                     }
                 };
                  document.getElementById('auto-battle-toggle').onchange = async (e) => {
-                    const enabled = e.target.checked;
-                    const { error } = await supabaseClient.from('battle_profiles').update({ auto_battle_enabled: enabled }).eq('id', currentUser.id);
-                    if (error) { 
-                        showModal('오류', `<p>설정 저장 실패: ${error.message}</p><p>데이터베이스 RLS 정책이 올바르게 설정되었는지 확인해주세요.</p>`);
-                        e.target.checked = !enabled; // Revert checkbox on error
-                    } else {
-                        currentProfile.auto_battle_enabled = enabled;
-                    }
-                };
+                     const enabled = e.target.checked;
+                     const { error } = await supabaseClient.from('battle_profiles').update({ auto_battle_enabled: enabled }).eq('id', currentUser.id);
+                     if (error) { 
+                         showModal('오류', `<p>설정 저장 실패: ${error.message}</p><p>데이터베이스 RLS 정책이 올바르게 설정되었는지 확인해주세요.</p>`);
+                         e.target.checked = !enabled; // Revert checkbox on error
+                     } else {
+                         currentProfile.auto_battle_enabled = enabled;
+                         if (enabled) {
+                             startAutoBattleCheck();
+                         } else {
+                             stopAutoBattleCheck();
+                         }
+                     }
+                 };
                  document.getElementById('change-email-form').onsubmit = async (e) => {
-                    e.preventDefault();
-                    const newEmail = document.getElementById('new-email-input').value;
-                    const { error } = await supabaseClient.auth.updateUser(
-                        { email: newEmail },
-                        { emailRedirectTo: 'https://07150906.vercel.app' }
-                    );
-                    if (error) {
-                        showModal('이메일 변경 오류', `<p>${error.message}</p>`);
-                    } else {
-                        showModal('확인메일 발송', `<p><strong>${newEmail}</strong>(으)로 이메일 변경 확인 메일을 보냈습니다. 이메일을 확인해주세요.</p>`);
-                    }
-                };
+                     e.preventDefault();
+                     const newEmail = document.getElementById('new-email-input').value;
+                     const { error } = await supabaseClient.auth.updateUser(
+                         { email: newEmail },
+                         { emailRedirectTo: 'https://07150906.vercel.app' }
+                     );
+                     if (error) {
+                         showModal('이메일 변경 오류', `<p>${error.message}</p>`);
+                     } else {
+                         showModal('확인메일 발송', `<p><strong>${newEmail}</strong>(으)로 이메일 변경 확인 메일을 보냈습니다. 이메일을 확인해주세요.</p>`);
+                     }
+                 };
                 document.getElementById('check-in-btn').onclick = async () => {
                     const today = new Date().toISOString().split('T')[0];
                     if (currentProfile.last_check_in === today) {
@@ -1471,6 +1890,142 @@ ${abilityListForPrompt}
                 rankingPodiumView.innerHTML = `<p class="text-center text-gray-500 col-span-full">아직 랭킹 데이터가 없습니다.</p>`;
             }
         };
+
+        // --- 3D Background ---
+        function initPokedex3DBackground() {
+            let scene, camera, renderer, stars;
+            const container = document.getElementById('pokedex-3d-background');
+            
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 1000);
+            camera.position.z = 1;
+            
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            container.appendChild(renderer.domElement);
+
+            const starVertices = [];
+            for (let i = 0; i < 10000; i++) {
+                const x = (Math.random() - 0.5) * 2000;
+                const y = (Math.random() - 0.5) * 2000;
+                const z = (Math.random() - 0.5) * 2000;
+                starVertices.push(x, y, z);
+            }
+
+            const starGeometry = new THREE.BufferGeometry();
+            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+            const starMaterial = new THREE.PointsMaterial({ color: 0xaaaaaa, size: 0.7 });
+            stars = new THREE.Points(starGeometry, starMaterial);
+            scene.add(stars);
+
+            let mouseX = 0;
+            let mouseY = 0;
+            document.addEventListener('mousemove', (e) => {
+                mouseX = e.clientX;
+                mouseY = e.clientY;
+            });
+
+            function animate() {
+                requestAnimationFrame(animate);
+                stars.rotation.y += 0.0001;
+                stars.rotation.x += 0.0001;
+
+                // Parallax effect
+                const targetX = mouseX * .0001;
+                const targetY = mouseY * .0001;
+                camera.position.x += (targetX - camera.position.x) * 0.02;
+                camera.position.y += (-targetY - camera.position.y) * 0.02;
+                camera.lookAt(scene.position);
+
+                renderer.render(scene, camera);
+            }
+            animate();
+            
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+        
+        // --- Auto Battle Logic ---
+        function startAutoBattleCheck() {
+            if (autoBattleInterval) clearInterval(autoBattleInterval);
+            autoBattleInterval = setInterval(runAutoBattle, 30000);
+            console.log("Auto-battle checker started.");
+            setTimeout(runAutoBattle, 5000);
+        }
+
+        function stopAutoBattleCheck() {
+            if (autoBattleInterval) {
+                clearInterval(autoBattleInterval);
+                autoBattleInterval = null;
+                console.log("Auto-battle checker stopped.");
+            }
+        }
+        
+        async function runAutoBattle() {
+            if (isAutoBattleRunning || !currentUser || !currentProfile?.auto_battle_enabled) {
+                return;
+            }
+            isAutoBattleRunning = true;
+            console.log("Running auto-battle check...");
+
+            try {
+                const { data: myChars, error: myCharsError } = await supabaseClient.from('battle_characters').select('id, data, level, rank_points').eq('creator_id', currentUser.id);
+                if (myCharsError || !myChars || myChars.length === 0) {
+                    isAutoBattleRunning = false; return;
+                }
+                const myCharacter = myChars[Math.floor(Math.random() * myChars.length)];
+                
+                const { data: opponents, error: opponentsError } = await supabaseClient.from('battle_characters').select('id, data, level, rank_points').neq('creator_id', currentUser.id).limit(50);
+                 if (opponentsError || !opponents || opponents.length === 0) {
+                    isAutoBattleRunning = false; return;
+                }
+                const opponent = opponents[Math.floor(Math.random() * opponents.length)];
+
+                const simPlayer = { ...myCharacter.data, id: myCharacter.id, level: myCharacter.level || 1, rank_points: myCharacter.rank_points };
+                const simOpponent = { ...opponent.data, id: opponent.id, level: opponent.level || 1, rank_points: opponent.rank_points };
+
+                initializeFighter(simPlayer);
+                initializeFighter(simOpponent);
+
+                let turn = 1;
+                while (simPlayer.battleStatus.currentHP > 0 && simOpponent.battleStatus.currentHP > 0 && turn < 50) {
+                    const playerMove = chooseSmartMove(simPlayer, simOpponent);
+                    const opponentMove = chooseSmartMove(simOpponent, simPlayer);
+
+                    const playerSpeed = simPlayer.stats.speed * getStatMultiplier(simPlayer.battleStatus.stat_stages.speed);
+                    const opponentSpeed = simOpponent.stats.speed * getStatMultiplier(simOpponent.battleStatus.stat_stages.speed);
+                    
+                    let firstAttacker, secondAttacker, firstMove, secondMove;
+                    if (playerSpeed >= opponentSpeed) {
+                        [firstAttacker, secondAttacker, firstMove, secondMove] = [simPlayer, simOpponent, playerMove, opponentMove];
+                    } else {
+                        [firstAttacker, secondAttacker, firstMove, secondMove] = [simOpponent, simPlayer, opponentMove, playerMove];
+                    }
+
+                    secondAttacker.battleStatus.currentHP -= calculateDamage(firstAttacker, secondAttacker, firstMove, turn).damage;
+                    if (secondAttacker.battleStatus.currentHP <= 0) break;
+                    firstAttacker.battleStatus.currentHP -= calculateDamage(secondAttacker, firstAttacker, secondMove, turn).damage;
+                    
+                    turn++;
+                }
+
+                const winner = simPlayer.battleStatus.currentHP > 0 ? myCharacter : opponent;
+                const loser = winner.id === myCharacter.id ? opponent : myCharacter;
+                
+                await updatePostBattleStats(winner, loser);
+                showToast(`[자동 전투] ${winner.data.name}이(가) ${loser.data.name}에게 승리했습니다!`, 'success');
+
+            } catch(e) {
+                console.error("Auto-battle failed:", e);
+                 showToast('자동 전투 중 오류가 발생했습니다.', 'error');
+            } finally {
+                 isAutoBattleRunning = false;
+            }
+        }
+
 
         // --- Event Listeners & Initial Load ---
         function initApp() {
