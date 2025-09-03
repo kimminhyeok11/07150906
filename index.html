@@ -140,21 +140,31 @@
         }
         .damage-indicator {
             position: absolute;
-            font-size: 2.5rem;
+            font-size: 2rem; /* Mobile first font size */
             font-weight: 900;
             color: white;
-            -webkit-text-stroke: 2px black;
+            -webkit-text-stroke: 1px black;
             animation: damage-pop 1s ease-out forwards;
             pointer-events: none;
         }
         .damage-indicator.critical {
             color: var(--primary);
-            font-size: 3.5rem;
+            font-size: 2.5rem; /* Mobile first font size */
              -webkit-text-stroke: 2px white;
         }
         @keyframes damage-pop {
             0% { transform: translateY(0) scale(1); opacity: 1; }
-            100% { transform: translateY(-80px) scale(1.5); opacity: 0; }
+            100% { transform: translateY(-60px) scale(1.3); opacity: 0; }
+        }
+        /* Desktop sizes for damage indicator */
+        @media (min-width: 768px) {
+            .damage-indicator {
+                font-size: 2.5rem;
+                -webkit-text-stroke: 2px black;
+            }
+            .damage-indicator.critical {
+                font-size: 3.5rem;
+            }
         }
 
 
@@ -168,7 +178,7 @@
         
         /* Modal, Tooltip, Filters */
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; z-index: 10000; backdrop-filter: blur(5px); }
-        .modal-content { animation: fadeIn 0.3s; padding: 2rem; border-radius: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+        .modal-content { animation: fadeIn 0.3s; padding: 1.5rem; border-radius: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
         #move-tooltip { position: fixed; background: #1e293b; color: #cbd5e1; padding: 0.5rem 1rem; border-radius: 0.5rem; border: 1px solid #334155; z-index: 10002; pointer-events: none; opacity: 0; transition: opacity 0.2s; font-size: 0.875rem; }
         .filter-btn { padding: 0.5rem 1rem; border-radius: 999px; font-weight: bold; background-color: #334155; color: #94a3b8; transition: all 0.2s ease; }
         .filter-btn.active { background-color: var(--primary); color: white; }
@@ -197,6 +207,23 @@
             left: auto;
             right: 0;
         }
+
+        .status-icon {
+            position: absolute;
+            left: 8px;
+            bottom: 8px;
+            width: 24px;
+            height: 24px;
+            background-color: rgba(0,0,0,0.7);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            z-index: 3;
+        }
+
     </style>
 </head>
 <body class="bg-slate-900 text-slate-300">
@@ -210,16 +237,16 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16">
                 <div class="flex items-center">
-                    <span class="font-title text-2xl text-cyan-400 cursor-pointer" id="home-btn">몬배틀 헌터즈</span>
+                    <span class="font-title text-xl sm:text-2xl text-cyan-400 cursor-pointer" id="home-btn">몬배틀 헌터즈</span>
                 </div>
-                <div id="nav-links" class="flex items-center gap-2 sm:gap-4"></div>
+                <div id="nav-links" class="flex items-center gap-1 sm:gap-4"></div>
             </div>
         </div>
     </nav>
 
     <!-- Auth View -->
     <div id="auth-view" class="view">
-        <div class="max-w-md mx-auto mt-10 p-8 bg-slate-800 rounded-lg shadow-lg">
+        <div class="max-w-md mx-auto mt-10 p-6 sm:p-8 bg-slate-800 rounded-lg shadow-lg">
             <div id="auth-tabs" class="flex border-b border-slate-700 mb-6">
                 <button data-tab="login" class="tab-btn flex-1 py-2 font-bold text-gray-500 border-b-2 border-transparent">로그인</button>
                 <button data-tab="signup" class="tab-btn flex-1 py-2 font-bold text-gray-500 border-b-2 border-transparent">회원가입</button>
@@ -254,9 +281,9 @@
     <div id="pokedex-view" class="view">
         <div class="max-w-7xl mx-auto p-2 sm:p-4">
              <div id="main-header-background" class="relative bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl shadow-lg overflow-hidden mb-6">
-                <header class="text-center py-12 px-4">
-                    <h1 class="font-title text-4xl md:text-5xl text-gray-100 drop-shadow-lg">몬배틀 헌터즈</h1>
-                    <p class="text-gray-300 mt-1 text-sm">우주 최강의 종족을 가리는 갤럭시 토너먼트!</p>
+                <header class="text-center py-8 sm:py-12 px-4">
+                    <h1 class="font-title text-3xl sm:text-4xl md:text-5xl text-gray-100 drop-shadow-lg">몬배틀 헌터즈</h1>
+                    <p class="text-gray-300 mt-1 text-xs sm:text-sm">우주 최강의 종족을 가리는 갤럭시 토너먼트!</p>
                     <div class="mt-4 flex justify-center flex-wrap gap-2">
                         <button id="go-to-battle-btn" class="bg-red-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-red-500 transition-transform transform hover:scale-105 disabled:bg-gray-600 disabled:cursor-not-allowed text-sm shadow-md">배틀 아레나</button>
                         <button id="go-to-ranking-btn" class="bg-orange-500 text-white font-bold py-2 px-4 rounded-lg hover:bg-orange-400 transition-transform transform hover:scale-105 text-sm shadow-md">랭킹 보기</button>
@@ -273,12 +300,12 @@
 
             <div id="character-creation-section" class="bg-slate-800/80 backdrop-blur-sm p-4 rounded-2xl shadow-lg mb-4">
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
-                    <select id="universe-select" class="p-2 border-2 rounded-lg focus:outline-none focus:ring-2 bg-slate-700 text-white border-slate-600 focus:ring-sky-500">
+                    <select id="universe-select" class="p-2 border-2 rounded-lg focus:outline-none focus:ring-2 bg-slate-700 text-white border-slate-600 focus:ring-sky-500 text-sm sm:text-base">
                         <option value="에테리얼">에테리얼 (에너지 종족)</option>
                         <option value="키티노이드">키티노이드 (곤충 종족)</option>
                         <option value="어비셜">어비셜 (심연 종족)</option>
                     </select>
-                    <input type="text" id="character-prompt" class="md:col-span-2 p-2 border-2 rounded-lg focus:outline-none focus:ring-2 bg-slate-700 text-white border-slate-600 focus:ring-teal-400" placeholder="예: 불타는 날개를 가진, 수정 갑옷을 입은">
+                    <input type="text" id="character-prompt" class="md:col-span-2 p-2 border-2 rounded-lg focus:outline-none focus:ring-2 bg-slate-700 text-white border-slate-600 focus:ring-teal-400 text-sm sm:text-base" placeholder="예: 불타는 날개를 가진, 수정 갑옷을 입은">
                 </div>
                 <div class="mt-3 flex justify-center items-center gap-4">
                     <button id="generate-btn" class="bg-teal-500 text-white font-bold py-2 px-5 rounded-lg hover:bg-teal-400 transition-transform transform hover:scale-105 shadow-lg">
@@ -556,11 +583,11 @@
             if (appState.currentUser && appState.currentProfile) {
                 const nickname = appState.currentProfile.nickname || appState.currentUser.email.split('@')[0];
                 navLinks.innerHTML = `
-                    <span class="font-bold text-sm sm:text-base text-gray-300 hidden md:inline">환영합니다, ${nickname}님!</span>
-                    <span class="font-bold text-sm sm:text-base text-yellow-400">크레딧: ${appState.currentProfile.credits}</span>
-                    <button class="font-bold text-sm sm:text-base text-sky-400 hover:underline p-2" id="profile-btn">마이페이지</button>
-                    ${appState.currentProfile.is_admin ? `<button id="admin-btn" class="font-bold text-sm sm:text-base text-purple-400 hover:underline p-2">관리자</button>` : ''}
-                    <button id="logout-btn" class="font-bold text-sm sm:text-base text-red-400 hover:underline p-2">로그아웃</button>
+                    <span class="font-bold text-xs sm:text-base text-gray-300 hidden md:inline">환영합니다, ${nickname}님!</span>
+                    <span class="font-bold text-xs sm:text-base text-yellow-400">크레딧: ${appState.currentProfile.credits}</span>
+                    <button class="font-bold text-xs sm:text-base text-sky-400 hover:underline p-1 sm:p-2" id="profile-btn">마이페이지</button>
+                    ${appState.currentProfile.is_admin ? `<button id="admin-btn" class="font-bold text-xs sm:text-base text-purple-400 hover:underline p-1 sm:p-2">관리자</button>` : ''}
+                    <button id="logout-btn" class="font-bold text-xs sm:text-base text-red-400 hover:underline p-1 sm:p-2">로그아웃</button>
                 `;
                 document.getElementById('profile-btn').onclick = () => navigateTo('profile-view', appState.currentUser.id);
                 if (appState.currentProfile.is_admin) document.getElementById('admin-btn').onclick = () => navigateTo('admin-view');
@@ -1040,6 +1067,8 @@ ${abilityListForPrompt}
         }
         
         function chooseSmartMove(attacker, defender) {
+            const hasDamagingMove = attacker.moves.some(m => MASTER_SKILL_LIST[m.moveId]?.type === 'damage');
+
             let moveScores = attacker.moves.map((move) => {
                 const masterMove = MASTER_SKILL_LIST[move.moveId] || {};
                 let score = 0;
@@ -1047,38 +1076,43 @@ ${abilityListForPrompt}
                 if (masterMove.type === 'damage') {
                     let { damage, effectiveness } = calculateDamage(attacker, defender, move, 1);
                     const isLethal = damage >= defender.battleStatus.currentHP;
-                    if (isLethal) { score += 10000; }
-                    score += damage;
-                    if (effectiveness > 1) score *= 2;
-                    if (effectiveness < 1) score *= 0.5;
-                    return { move, score, isLethal };
-                }
-                switch (masterMove.type) {
-                    case 'heal':
-                        const missingHpPercent = 1 - (attacker.battleStatus.currentHP / attacker.battleStatus.maxHP);
-                        if (missingHpPercent > 0.4) score += missingHpPercent * 150;
-                        break;
-                    case 'buff':
-                        const isMaxBuff = masterMove.stat !== 'all' && attacker.battleStatus.stat_stages[masterMove.stat] >= 6;
-                        if (!isMaxBuff && attacker.battleStatus.currentHP / attacker.battleStatus.maxHP > 0.3) { score += 35; }
-                        break;
-                    case 'debuff':
-                        const isMinDebuff = masterMove.stat !== 'all' && defender.battleStatus.stat_stages[masterMove.stat] <= -6;
-                         if (!isMinDebuff && defender.battleStatus.currentHP / defender.battleStatus.maxHP > 0.2) { score += 30; }
-                        break;
-                    case 'status':
-                        if (!defender.battleStatus.status) score += 40;
-                        break;
+                    
+                    if (isLethal) return { move, score: 10000 }; 
+                    
+                    score += damage * 1.5; // Prioritize damage
+                    if (effectiveness > 1) score *= 2; // Heavily prioritize super-effective
+                    if (effectiveness < 1) score *= 0.2; // Avoid not very effective
+                    
+                } else {
+                     // Lower base score for non-damaging moves if a damage move is available
+                    score = hasDamagingMove ? 10 : 40;
+
+                    switch (masterMove.type) {
+                        case 'heal':
+                            const missingHpPercent = 1 - (attacker.battleStatus.currentHP / attacker.battleStatus.maxHP);
+                            if (missingHpPercent > 0.6) score += 120; // High priority heal
+                            else if (missingHpPercent > 0.3) score += 50;
+                            break;
+                        case 'buff':
+                            if (masterMove.stat !== 'all' && attacker.battleStatus.stat_stages[masterMove.stat] < 2) {
+                                score += 35; // Buff if not already significantly buffed
+                            }
+                            break;
+                        case 'debuff':
+                             if (masterMove.stat !== 'all' && defender.battleStatus.stat_stages[masterMove.stat] > -2) {
+                                score += 30; // Debuff if not already significantly debuffed
+                            }
+                            break;
+                        case 'status':
+                            if (!defender.battleStatus.status) score += 45; // High priority to inflict status if none exists
+                            break;
+                    }
                 }
                 score += Math.random() * 5; 
-                return { move, score, isLethal: false };
+                return { move, score };
             });
+
             moveScores.sort((a, b) => b.score - a.score);
-            
-            if (moveScores.length > 0 && moveScores[0].score < 0) {
-                 return attacker.moves[0];
-            }
-            console.log("AI Move Choice:", moveScores[0]?.move?.name, "Score:", moveScores[0]?.score);
             return moveScores[0].move;
         }
 
@@ -1132,15 +1166,15 @@ ${abilityListForPrompt}
             ]);
             
             const infoContainer = createElement('div', { className: 'flex-1' }, [
-                createElement('h3', { className: 'font-bold text-xl' }, [
+                createElement('h3', { className: 'font-bold text-lg sm:text-xl' }, [
                     document.createTextNode(char.name + ' '),
                     createElement('span', { className: 'text-sm text-gray-500', textContent: `(${char.universe || 'Unknown'})` })
                 ]),
                 createElement('div', { className: 'flex items-center gap-2 my-1' }, [
-                    createElement('span', { className: `rarity-badge rarity-${char.rarity}`, textContent: char.rarity }),
+                    createElement('span', { className: `rarity-badge text-xs`, textContent: char.rarity }),
                 ]),
-                createElement('div', { className: 'flex gap-2 my-2' }, char.types.map(t => createElement('span', { className: `type-badge type-${t}`, textContent: typeTranslations[t] || t }))),
-                createElement('p', { className: 'text-sm text-gray-400' }, [
+                createElement('div', { className: 'flex gap-1 sm:gap-2 my-2 flex-wrap' }, char.types.map(t => createElement('span', { className: `type-badge text-xs`, textContent: typeTranslations[t] || t }))),
+                createElement('p', { className: 'text-xs sm:text-sm text-gray-400' }, [
                     document.createTextNode('소환사: '),
                     createElement('a', { href: '#', 'data-profile-id': char.creator_id, className: 'text-sky-400 hover:underline', textContent: creatorName })
                 ])
@@ -1194,18 +1228,19 @@ ${abilityListForPrompt}
         async function renderRankingPodium() {
             const { data, error } = await supabaseClient.from('battle_characters')
                 .select('*, profile:battle_profiles(id, nickname, email)')
-                .order('rank_points', { ascending: false })
+                .order('rank_points', { ascending: false, nullsFirst: false })
                 .limit(3);
             if (error) { console.error('Error fetching podium data:', error); return; }
+            
             const top3 = data.map(c => ({ ...c.data, id: c.id, creator_id: c.creator_id, rank_points: c.rank_points, image_url: c.image_url, profile: c.profile }));
             
             const rankingPodiumView = document.getElementById('ranking-podium-view');
             rankingPodiumView.innerHTML = '';
 
             const podiumData = {
-                first: top3.find((c, i) => i === 0),
-                second: top3.find((c, i) => i === 1),
-                third: top3.find((c, i) => i === 2)
+                first: top3[0] || null,
+                second: top3[1] || null,
+                third: top3[2] || null
             };
 
             const createPodiumItem = (char, rank) => {
@@ -1594,7 +1629,8 @@ ${abilityListForPrompt}
                              <div id="damage-indicator-container" class="absolute inset-0 pointer-events-none z-20"></div>
                             <!-- Top section - Enemy -->
                             <div class="flex justify-end">
-                                <div id="enemy-ui" class="battle-character-ui p-3 w-full max-w-sm">
+                                <div id="enemy-ui" class="battle-character-ui p-3 w-full max-w-sm relative">
+                                    <div id="enemy-status-icon" class="status-icon"></div>
                                     <div class="flex justify-between items-center">
                                         <h3 id="enemy-name" class="font-bold text-lg">${enemyChar.name}</h3>
                                         <p id="enemy-level" class="text-sm font-semibold">LV.${enemyChar.level}</p>
@@ -1607,19 +1643,20 @@ ${abilityListForPrompt}
                             <!-- Middle section - Sprites -->
                             <div class="flex-1 grid grid-cols-2 items-center relative">
                                 <div class="flex justify-center">
-                                    <img id="my-sprite" src="${myChar.image_url}" class="battle-character-sprite max-w-[250px] max-h-[250px] -scale-x-100">
+                                    <img id="my-sprite" src="${myChar.image_url}" class="battle-character-sprite max-w-[200px] sm:max-w-[250px] max-h-[250px] -scale-x-100">
                                 </div>
                                 <div class="flex justify-center">
-                                    <img id="enemy-sprite" src="${enemyChar.image_url}" class="battle-character-sprite max-w-[250px] max-h-[250px]">
+                                    <img id="enemy-sprite" src="${enemyChar.image_url}" class="battle-character-sprite max-w-[200px] sm:max-w-[250px] max-h-[250px]">
                                 </div>
                                 <div class="absolute inset-0 flex justify-center items-center pointer-events-none z-10">
-                                    <span class="font-title text-8xl text-white opacity-60" style="text-shadow: 0 0 15px var(--primary);">VS</span>
+                                    <span class="font-title text-6xl sm:text-8xl text-white opacity-60" style="text-shadow: 0 0 15px var(--primary);">VS</span>
                                 </div>
                             </div>
                             
                             <!-- Bottom section - Player UI and Controls -->
                             <div class="flex flex-col md:flex-row gap-4 items-end">
-                                <div id="my-ui" class="battle-character-ui p-3 w-full max-w-sm order-2 md:order-1">
+                                <div id="my-ui" class="battle-character-ui p-3 w-full max-w-sm order-2 md:order-1 relative">
+                                     <div id="my-status-icon" class="status-icon"></div>
                                     <div class="flex justify-between items-center">
                                         <h3 id="my-name" class="font-bold text-lg">${myChar.name}</h3>
                                         <p id="my-level" class="text-sm font-semibold">LV.${myChar.level}</p>
@@ -1665,6 +1702,8 @@ ${abilityListForPrompt}
             const battleControls = document.getElementById('battle-controls');
             const battleLog = document.getElementById('battle-log');
             const damageContainer = document.getElementById('damage-indicator-container');
+            const myStatusIcon = document.getElementById('my-status-icon');
+            const enemyStatusIcon = document.getElementById('enemy-status-icon');
 
             function showDamageIndicator(targetSprite, damage, isCritical) {
                 const indicator = document.createElement('div');
@@ -1685,6 +1724,11 @@ ${abilityListForPrompt}
                 indicator.addEventListener('animationend', () => {
                     indicator.remove();
                 });
+            }
+            
+            function updateStatusIcons() {
+                myStatusIcon.innerHTML = battleState.player.battleStatus.status ? `<span title="${battleState.player.battleStatus.status}">${battleState.player.battleStatus.status === 'poison' ? '☠️' : '⚡'}</span>` : '';
+                enemyStatusIcon.innerHTML = battleState.enemy.battleStatus.status ? `<span title="${battleState.enemy.battleStatus.status}">${battleState.enemy.battleStatus.status === 'poison' ? '☠️' : '⚡'}</span>` : '';
             }
 
             function updateLog(message) {
@@ -1797,6 +1841,7 @@ ${abilityListForPrompt}
                     updateLog(`${myChar.name}, 무엇을 할까?`);
                 } else {
                     await new Promise(r => setTimeout(r, 1000));
+                    autoBattleLoop();
                 }
             }
             
@@ -1872,9 +1917,6 @@ ${abilityListForPrompt}
                 while (!battleState.winner) {
                     const playerMove = chooseSmartMove(battleState.player, battleState.enemy);
                     await processTurn(playerMove);
-                    if (!battleState.winner) {
-                        await new Promise(r => setTimeout(r, 2000));
-                    }
                 }
             }
             
@@ -1889,10 +1931,9 @@ ${abilityListForPrompt}
             } else {
                 myChar.moves.forEach((move, index) => {
                     const btn = createElement('button', { className: 'battle-move-item p-3 rounded-lg border text-left', 'data-move-index': index });
-                    const masterMove = MASTER_SKILL_LIST[move.moveId] || {};
                     btn.innerHTML = `
-                        <p class="font-bold">${move.name} <span class="text-xs text-gray-400">(${typeTranslations[move.type] || move.type})</span></p>
-                        <p class="text-xs text-gray-400">PP: ∞</p>
+                        <p class="font-bold text-sm sm:text-base">${move.name}</p>
+                        <p class="text-xs text-gray-400">${typeTranslations[move.type] || move.type}</p>
                     `;
                     btn.onclick = () => {
                         if (battleState.isProcessing || battleState.winner) return;
@@ -1946,7 +1987,7 @@ ${abilityListForPrompt}
             rankingViewContainer.innerHTML = `<div class="text-center p-8"><h2 class="text-2xl font-bold">랭킹 로딩 중...</h2></div>`;
             const { data, error } = await supabaseClient.from('battle_characters')
                 .select('*, profile:battle_profiles(id, nickname, email), record:battle_records(*)')
-                .order('rank_points', { ascending: false })
+                .order('rank_points', { ascending: false, nullsFirst: false })
                 .limit(100);
 
             if (error) {
