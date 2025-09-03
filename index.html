@@ -68,7 +68,7 @@
         }
 
         /* Type & Universe Badges */
-        .type-badge { padding: 4px 12px; border-radius: 12px; font-weight: 700; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
+        .type-badge { padding: 2px 8px; font-size: 0.75rem; border-radius: 12px; font-weight: 700; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
         .type-Normal { background-color: #A8A77A; } .type-Fire { background-color: #EE8130; }
         .type-Water { background-color: #6390F0; } .type-Electric { background-color: #F7D02C; }
         .type-Grass { background-color: #7AC74C; } .type-Ice { background-color: #96D9D6; }
@@ -81,7 +81,7 @@
         .type-Light { background: linear-gradient(45deg, #FFFDE4, #F9E79F); color: #B48A00; text-shadow: 0 0 2px white; }
 
         /* Rarity Styles & Card Border Glows */
-        .rarity-badge { padding: 4px 12px; border-radius: 12px; font-weight: 900; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
+        .rarity-badge { padding: 2px 8px; font-size: 0.75rem; border-radius: 12px; font-weight: 900; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
         .rarity-일반 { background-color: #B0BEC5; } .rarity-희귀 { background-color: #42A5F5; }
         .rarity-에픽 { background-color: #AB47BC; } .rarity-전설 { background: linear-gradient(45deg, #FFEE58, #F57F17); text-shadow: 0 0 2px black; }
         .rarity-고대 { background: linear-gradient(45deg, #4DB6AC, #004D40); text-shadow: 0 0 2px black; }
@@ -96,14 +96,22 @@
         .pokedex-card:hover.card-border-고대 { box-shadow: 0 10px 30px rgba(0, 77, 64, 0.4); }
         .pokedex-card:hover.card-border-신화 { box-shadow: 0 10px 30px rgba(191, 54, 12, 0.5); }
 
-        /* Ranking Podium Styles */
-        .podium { display: flex; justify-content: center; align-items: flex-end; gap: 1rem; min-height: 280px; }
-        .podium-item { text-align: center; width: 30%; max-width: 150px; cursor: pointer; transition: transform 0.3s ease; display: flex; flex-direction: column; align-items: center; }
-        .podium-item:hover { transform: scale(1.05); }
-        .podium-img { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; margin: 0 auto; border: 4px solid; margin-bottom: -40px; z-index: 1; transition: all 0.3s ease; }
-        .podium-item:hover .podium-img { box-shadow: 0 0 15px var(--border-color); }
-        .podium-base { color: white; padding-top: 45px; border-radius: 8px; width: 100%; box-shadow: inset 0 4px 10px rgba(0,0,0,0.4); padding-bottom: 0.5rem; transition: background 0.3s ease; }
-        .podium-1 { order: 2; --border-color: #FFD700; } .podium-1 .podium-base { min-height: 150px; background: linear-gradient(45deg, #FFD700, #F5B000); color: #333; } .podium-1 .podium-img { border-color: #FFD700; width: 100px; height: 100px; margin-bottom:-50px; }
+        /* Upgraded Podium Styles */
+        .podium { display: flex; justify-content: center; align-items: flex-end; gap: 0.5rem; min-height: 280px; }
+        .podium-item { text-align: center; width: 33%; max-width: 150px; cursor: pointer; transition: transform 0.3s ease; display: flex; flex-direction: column; align-items: center; position: relative; }
+        .podium-item:hover { transform: translateY(-5px) scale(1.05); }
+        .podium-img { width: 70px; height: 70px; border-radius: 50%; object-fit: cover; margin: 0 auto; border: 4px solid; margin-bottom: -35px; z-index: 1; transition: all 0.3s ease; box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .podium-item:hover .podium-img { box-shadow: 0 0 20px var(--border-color); }
+        .podium-base { color: white; padding: 40px 0.5rem 0.5rem 0.5rem; border-radius: 8px; width: 100%; box-shadow: inset 0 4px 10px rgba(0,0,0,0.4); transition: background 0.3s ease; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; position: relative; overflow: hidden; }
+        .podium-base::before { content: ''; position: absolute; top: 0; left: 0; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 60%); transform: translate(-50%, -50%); animation: podium-glow 5s linear infinite; opacity: 0; transition: opacity 0.3s ease; }
+        .podium-item:hover .podium-base::before { opacity: 1; }
+        @keyframes podium-glow { 0% { transform: translate(-50%, -50%) rotate(0deg); } 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+        .podium-rank { position: absolute; top: 5px; font-size: 2.5rem; font-weight: 900; font-family: 'Black Han Sans', sans-serif; opacity: 0.1; z-index: 0; color: inherit; }
+        .podium-name { font-weight: 900; font-size: 0.875rem; text-shadow: 0 1px 3px rgba(0,0,0,0.5); z-index: 1; width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 0.25rem; }
+        .podium-summoner { font-size: 0.7rem; opacity: 0.8; z-index: 1; display: flex; align-items: center; width: 100%; justify-content: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 0.25rem; }
+        .podium-rp { font-weight: 700; font-size: 0.8rem; color: var(--accent); background-color: rgba(0,0,0,0.3); padding: 2px 8px; border-radius: 12px; margin-top: 0.25rem; z-index: 1; }
+        @media (min-width: 640px) { .podium-name { font-size: 1rem; } .podium-summoner { font-size: 0.75rem; } .podium-rp { font-size: 0.875rem; } }
+        .podium-1 { order: 2; --border-color: #FFD700; } .podium-1 .podium-base { min-height: 150px; background: linear-gradient(45deg, #FFD700, #F5B000); color: #333; } .podium-1 .podium-img { border-color: #FFD700; width: 90px; height: 90px; margin-bottom: -45px; }
         .podium-2 { order: 1; --border-color: #C0C0C0; } .podium-2 .podium-base { min-height: 120px; background: linear-gradient(45deg, #C0C0C0, #A9A9A9); color: #333; } .podium-2 .podium-img { border-color: #C0C0C0; }
         .podium-3 { order: 3; --border-color: #CD7F32; } .podium-3 .podium-base { min-height: 100px; background: linear-gradient(45deg, #CD7F32, #A0522D); color: #fff; } .podium-3 .podium-img { border-color: #CD7F32; }
 
@@ -181,8 +189,28 @@
         .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; justify-content: center; align-items: center; z-index: 10000; backdrop-filter: blur(5px); }
         .modal-content { animation: fadeIn 0.3s; padding: 1.5rem; border-radius: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
         #move-tooltip { position: fixed; background: #1e293b; color: #cbd5e1; padding: 0.5rem 1rem; border-radius: 0.5rem; border: 1px solid #334155; z-index: 10002; pointer-events: none; opacity: 0; transition: opacity 0.2s; font-size: 0.875rem; }
-        .filter-btn { padding: 0.5rem 1rem; border-radius: 999px; font-weight: bold; background-color: #334155; color: #94a3b8; transition: all 0.2s ease; }
-        .filter-btn.active { background-color: var(--primary); color: white; }
+        .filter-btn {
+            background-color: var(--bg-light);
+            color: var(--text-light);
+            font-weight: bold;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transform: scale(1);
+            border: 2px solid transparent;
+        }
+        .filter-btn:hover {
+            transform: scale(1.05);
+            background-color: var(--bg-mid);
+        }
+        .filter-btn.active {
+            background-color: var(--primary);
+            color: white;
+            box-shadow: 0 4px 10px rgba(233, 69, 96, 0.3);
+            border-color: var(--primary);
+        }
+
 
         /* Inventory & Manual Styles */
         .inventory-item { background: linear-gradient(145deg, #2a2a3a, #1a1a2a); transition: transform 0.2s ease; }
@@ -236,7 +264,7 @@
     <!-- Navigation Bar -->
     <nav class="bg-slate-900/80 backdrop-blur-sm shadow-lg sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16">
+            <div class="flex items-center justify-between h-14">
                 <div class="flex items-center">
                     <span class="font-title text-xl sm:text-2xl text-cyan-400 cursor-pointer" id="home-btn">몬배틀 헌터즈</span>
                 </div>
@@ -294,7 +322,7 @@
                     </div>
                 </header>
                 <div id="ranking-podium-container" class="pb-12 px-4">
-                    <h2 class="font-title text-2xl text-center mb-6 text-gray-200">명예의 전당</h2>
+                    <h2 class="font-title text-2xl text-center mb-4 text-gray-200">명예의 전당</h2>
                     <div id="ranking-podium-view" class="podium"></div>
                 </div>
             </div>
@@ -315,15 +343,19 @@
                 </div>
                 <div id="error-message" class="text-yellow-400 mt-2 text-center text-sm font-semibold"></div>
             </div>
-             <div id="filter-container" class="flex justify-center gap-2 mb-4">
-                  <button class="filter-btn active" data-filter="all">전체</button>
-                  <button class="filter-btn" data-filter="에테리얼">에테리얼</button>
-                  <button class="filter-btn" data-filter="키티노이드">키티노이드</button>
-                  <button class="filter-btn" data-filter="어비셜">어비셜</button>
-             </div>
-            <div id="pokedex-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
-            <div id="empty-state" class="text-center py-16 px-6 bg-slate-800 rounded-2xl shadow-lg hidden"><h3 class="mt-4 text-xl font-semibold text-gray-100">도감이 비어있습니다. 첫 크리처를 소환해보세요!</h3></div>
-            <div id="pagination-controls" class="text-center mt-6"></div>
+            
+            <div class="pokedex-main-section bg-slate-800/50 rounded-2xl p-4">
+                <h2 class="font-title text-2xl text-center mb-4 text-slate-300">도감</h2>
+                <div id="filter-container" class="flex justify-center gap-2 mb-4 flex-wrap">
+                     <button class="filter-btn active" data-filter="all">전체</button>
+                     <button class="filter-btn" data-filter="에테리얼">에테리얼</button>
+                     <button class="filter-btn" data-filter="키티노이드">키티노이드</button>
+                     <button class="filter-btn" data-filter="어비셜">어비셜</button>
+                </div>
+                <div id="pokedex-container" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+                <div id="empty-state" class="text-center py-16 px-6 bg-slate-800 rounded-2xl shadow-lg hidden"><h3 class="mt-4 text-xl font-semibold text-gray-100">도감이 비어있습니다. 첫 크리처를 소환해보세요!</h3></div>
+                <div id="pagination-controls" class="text-center mt-6"></div>
+            </div>
         </div>
     </div>
     
@@ -992,19 +1024,14 @@ ${abilityListForPrompt}
                     level: newLevel,
                 };
                 if (leveledUp) {
-                     const winnerFullData = winner;
-                    // We need to update the `data` column which is a JSONB
-                    winnerFullData.stats = newStats;
-                    winnerFullData.level = newLevel; // Make sure level inside JSON is also updated if it exists
+                    const winnerFullData = { ...winner, stats: newStats, level: newLevel };
                     
-                    // Clean up non-JSON data before updating the `data` column
                     delete winnerFullData.id;
                     delete winnerFullData.creator_id;
                     delete winnerFullData.image_url;
                     delete winnerFullData.created_at;
                     delete winnerFullData.universe;
                     delete winnerFullData.rank_points;
-                    delete winnerFullData.level;
                     delete winnerFullData.experience;
                     delete winnerFullData.profile;
                     delete winnerFullData.record;
@@ -1172,9 +1199,9 @@ ${abilityListForPrompt}
                     createElement('span', { className: 'text-sm text-gray-500', textContent: `(${char.universe || 'Unknown'})` })
                 ]),
                 createElement('div', { className: 'flex items-center gap-2 my-1' }, [
-                    createElement('span', { className: `rarity-badge text-xs`, textContent: char.rarity }),
+                    createElement('span', { className: `rarity-badge`, textContent: char.rarity }),
                 ]),
-                createElement('div', { className: 'flex gap-1 sm:gap-2 my-2 flex-wrap' }, char.types.map(t => createElement('span', { className: `type-badge text-xs`, textContent: typeTranslations[t] || t }))),
+                createElement('div', { className: 'flex gap-1 sm:gap-2 my-2 flex-wrap' }, char.types.map(t => createElement('span', { className: `type-badge`, textContent: typeTranslations[t] || t }))),
                 createElement('p', { className: 'text-xs sm:text-sm text-gray-400' }, [
                     document.createTextNode('소환사: '),
                     createElement('a', { href: '#', 'data-profile-id': char.creator_id, className: 'text-sky-400 hover:underline', textContent: creatorName })
@@ -1250,11 +1277,15 @@ ${abilityListForPrompt}
                 const imageUrl = `${char.image_url}?width=256&quality=85`;
                 return `
                 <div class="podium-item podium-${rank}" data-char-id="${char.id}">
-                    <p class="text-3xl font-bold mb-2">${rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}</p>
                     <img src="${imageUrl}" class="podium-img">
-                    <div class="podium-base flex flex-col justify-end items-center p-2">
-                        <p class="text-md font-bold truncate w-full">${char.name}</p>
-                        <p class="text-sm font-bold">${char.rank_points || 1000} RP</p>
+                    <div class="podium-base">
+                        <div class="podium-rank">${rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}</div>
+                        <p class="podium-name">${char.name}</p>
+                        <p class="podium-summoner">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline-block mr-1" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clip-rule="evenodd" /></svg>
+                            ${creatorName}
+                        </p>
+                        <p class="podium-rp">${char.rank_points || 1000} RP</p>
                     </div>
                 </div>
             `};
@@ -1928,8 +1959,8 @@ ${abilityListForPrompt}
                 await new Promise(r => setTimeout(r, 2000));
                 autoBattleLoop();
             } else {
-                myChar.moves.forEach((move, index) => {
-                    const btn = createElement('button', { className: 'battle-move-item p-3 rounded-lg border text-left', 'data-move-index': index });
+                myChar.moves.forEach((move) => {
+                    const btn = createElement('button', { className: 'battle-move-item p-3 rounded-lg border text-left' });
                     btn.innerHTML = `
                         <p class="font-bold text-sm sm:text-base">${move.name}</p>
                         <p class="text-xs text-gray-400">${typeTranslations[move.type] || move.type}</p>
