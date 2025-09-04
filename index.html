@@ -108,8 +108,11 @@
         .battle-character-ui { width: 100%; max-width: 320px; }
         .controls-area { flex-shrink: 0; }
         
-        .hp-bar-inner { transition: width 0.5s ease-in-out; }
+        .hp-bar-inner, .bp-bar-inner { transition: width 0.5s ease-in-out; }
         .battle-character-ui.desperate { box-shadow: 0 0 15px 5px rgba(255, 0, 0, 0.7); border: 1px solid rgba(255, 100, 100, 0.8); }
+        .battle-character-sprite.broken { animation: broken-shake 0.5s; filter: saturate(0.2) brightness(0.8); }
+        @keyframes broken-shake { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
+
         .battle-moves-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
         .battle-move-item { background-color: rgba(0,0,0,0.5); padding: 8px; border-radius: 4px; font-size: 0.85rem; text-align: center; transition: all 0.2s ease; cursor: pointer; border: 1px solid #555; position: relative;}
         .battle-move-item:hover:not(:disabled) { background-color: rgba(255,255,255,0.1); transform: scale(1.05); border-color: #8abeb7;}
@@ -295,6 +298,10 @@
     <div id="admin-view" class="view"></div>
 
     <script type="module">
+        // =================================================================================
+        // --- 1. 앱 설정 및 초기화 (Setup & Initialization) ---
+        // =================================================================================
+        
         // --- Supabase Client Setup ---
         const { createClient } = supabase;
         const SUPABASE_URL = 'https://byepyjdvhggofjjwsqna.supabase.co';
@@ -346,6 +353,10 @@
         let characterSubscription = null;
         let activeFilter = 'all';
         let isAutoBattleRunning = false;
+        
+        // =================================================================================
+        // --- 2. 게임 핵심 데이터 (Game Core Data) ---
+        // =================================================================================
 
         const battleBackgrounds = [
             'https://byepyjdvhggofjjwsqna.supabase.co/storage/v1/object/public/battle_images/arion_ground.webp',
@@ -390,6 +401,10 @@
             'ADAPTABILITY': { text: '자신과 같은 타입의 기술 위력이 2배가 된다. (기존 1.5배)' },
             'MAGIC_GUARD': { text: '독, 반동 데미지 등 공격 이외의 데미지를 받지 않는다.' }
         };
+
+        // =================================================================================
+        // --- 3. 핵심 유틸리티 및 UI 함수 (Core Utilities & UI Functions) ---
+        // =================================================================================
 
         // --- Sound Engine ---
         let synths = {};
@@ -504,19 +519,46 @@
                     ${currentProfile.is_admin ? `<button id="admin-btn" class="font-bold text-sm sm:text-base text-[#c9c] hover:underline p-2">관리자</button>` : ''}
                     <button id="logout-btn" class="font-bold text-sm sm:text-base text-[#c99] hover:underline p-2">로그아웃</button>
                 `;
-                document.getElementById('profile-btn').onclick = () => navigateTo('profile-view', currentUser.id);
-                if (currentProfile.is_admin) document.getElementById('admin-btn').onclick = () => navigateTo('admin-view');
-                document.getElementById('logout-btn').onclick = handleLogout;
                 characterCreationSection.style.display = 'block';
                 goToBattleBtn.disabled = false;
             } else {
                 navLinks.innerHTML = `<button id="login-signup-btn" class="font-bold text-[#8abeb7] hover:underline p-2">로그인 / 회원가입</button>`;
-                document.getElementById('login-signup-btn').onclick = () => navigateTo('auth-view');
                 characterCreationSection.style.display = 'none';
                 goToBattleBtn.disabled = true;
             }
         }
 
+        function base64ToBlob(base64, contentType = '', sliceSize = 512) {
+            const byteCharacters = atob(base64.split(',')[1]);
+            const byteArrays = [];
+            for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+                const slice = byteCharacters.slice(offset, offset + sliceSize);
+                const byteNumbers = new Array(slice.length);
+                for (let i = 0; i < slice.length; i++) byteNumbers[i] = slice.charCodeAt(i);
+                byteArrays.push(new Uint8Array(byteNumbers));
+            }
+            return new Blob(byteArrays, { type: contentType });
+        }
+
+        function convertImageToWebP(base64Png, quality = 0.8) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    canvas.getContext('2d').drawImage(img, 0, 0);
+                    resolve(canvas.toDataURL('image/webp', quality));
+                };
+                img.onerror = (err) => reject(new Error("Failed to load image for WebP conversion."));
+                img.src = base64Png;
+            });
+        }
+
+        // =================================================================================
+        // --- 4. 데이터베이스 및 API 통신 (Database & API Communication) ---
+        // =================================================================================
+        
         // --- Data Fetching & Realtime ---
         async function initialDataLoad() {
             try {
@@ -539,6 +581,43 @@
                 console.error("Error on initial data load:", error);
                 showModal('데이터 로딩 오류', `<p>데이터를 불러오는 데 실패했습니다: ${error.message}</p><p>Supabase 데이터베이스의 RLS(보안 정책)이 올바르게 설정되었는지 확인해주세요.</p>`);
             }
+        }
+        
+        async function loadMoreCharacters() {
+            if (isLoadingMore) return;
+            isLoadingMore = true;
+
+            const loadMoreBtn = document.getElementById('load-more-btn');
+            if (loadMoreBtn) {
+                loadMoreBtn.textContent = '불러오는 중...';
+                loadMoreBtn.disabled = true;
+            }
+
+            const from = currentPage * PAGE_SIZE;
+            const to = from + PAGE_SIZE - 1;
+
+            let query = supabaseClient.from('battle_characters')
+                .select('*, profile:battle_profiles(id, nickname, email)', { count: 'exact' })
+                .order('created_at', { ascending: false })
+                .range(from, to);
+            
+            if (activeFilter !== 'all') {
+                query = query.eq('universe', activeFilter);
+            }
+
+            const { data, error, count } = await query;
+
+            if (error) {
+                console.error("Error fetching more characters:", error);
+                showModal('오류', '크리처를 더 불러오는 데 실패했습니다.');
+            } else {
+                totalCharacterCount = count;
+                const newCharacters = data.map(c => ({ ...c.data, id: c.id, created_at: c.created_at, creator_id: c.creator_id, rank_points: c.rank_points, image_url: c.image_url, level: c.level, experience: c.experience, universe: c.universe, profile: c.profile }));
+                allCharacters.push(...newCharacters);
+                currentPage++;
+                renderPokedexView();
+            }
+            isLoadingMore = false;
         }
 
         function handleRealtimeChanges(payload) {
@@ -596,7 +675,26 @@
                 .subscribe();
         }
 
-        // --- Authentication & Prophecy ---
+        async function callApiWithRetry(apiUrl, payload, retries = 3, delay = 1000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                    if (!response.ok) {
+                        if (response.status === 429) { await new Promise(res => setTimeout(res, delay * (i + 1))); continue; }
+                        throw new Error(`API Error (${response.status}): ${await response.text()}`);
+                    }
+                    return response.json();
+                } catch (error) {
+                    if (i === retries - 1) throw error;
+                    await new Promise(res => setTimeout(res, delay * (i + 1)));
+                }
+            }
+        }
+
+        // =================================================================================
+        // --- 5. 인증 및 유저 관리 (Authentication & User Management) ---
+        // =================================================================================
+
         async function generateSummonerProphecy(email) {
             const apiKey = "";
             const userIdentifier = email.split('@')[0];
@@ -696,8 +794,11 @@
         async function handleLogout() {
             await supabaseClient.auth.signOut();
         }
+
+        // =================================================================================
+        // --- 6. 크리처 생성 로직 (Character Generation Logic) ---
+        // =================================================================================
         
-        // --- Character Generation ---
         function determineRarityAndBST() {
             const rarityData = [
                 { rarity: '신화', bstRange: { min: 780, max: 850 }, weight: 5 },
@@ -784,22 +885,6 @@
             }
         }
         
-        async function callApiWithRetry(apiUrl, payload, retries = 3, delay = 1000) {
-            for (let i = 0; i < retries; i++) {
-                try {
-                    const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                    if (!response.ok) {
-                        if (response.status === 429) { await new Promise(res => setTimeout(res, delay * (i + 1))); continue; }
-                        throw new Error(`API Error (${response.status}): ${await response.text()}`);
-                    }
-                    return response.json();
-                } catch (error) {
-                    if (i === retries - 1) throw error;
-                    await new Promise(res => setTimeout(res, delay * (i + 1)));
-                }
-            }
-        }
-        
         async function generateCharacterImage(prompt, universe) {
             const apiKey = "";
             const universeStyleGuide = {
@@ -868,35 +953,35 @@ ${abilityListForPrompt}
             throw new Error("Character data generation failed or returned in an unexpected format.");
         }
         
-        // --- Battle & Ranking Logic ---
+        // =================================================================================
+        // --- 7. 전투 및 랭킹 로직 (Battle & Ranking Logic) ---
+        // =================================================================================
+
         const statStageMultipliers = { '-6': 2/8, '-5': 2/7, '-4': 2/6, '-3': 2/5, '-2': 2/4, '-1': 2/3, '0': 1, '1': 3/2, '2': 4/2, '3': 5/2, '4': 6/2, '5': 7/2, '6': 8/2 };
         function getStatMultiplier(stage) { return statStageMultipliers[stage] || 1; }
 
-        function calculateDamage(attacker, defender, move, turn) {
+        /**
+         * 데미지 계산 공식: 코즈믹 에너지 오버로드 시스템
+         * - 기본 데미지 = (공격 스탯 * 기술 위력 / 100)
+         * - 최종 데미지 = (기본 데미지 - 방어 스탯 / 2) * 각종 보정
+         * - 브레이크(BP) 데미지 = 기술 위력 / 4
+         * - '브레이크' 상태의 상대에게는 최종 데미지 2.5배
+         */
+        function calculateDamage(attacker, defender, move) {
             const masterMove = (move.moveId === 'STRUGGLE') 
-                ? { power: 50, accuracy: 100, category: 'Physical', type: 'damage' }
+                ? { power: 50, accuracy: 100, category: 'Physical' }
                 : MASTER_SKILL_LIST[move.moveId] || {};
-            
-            if (Math.random() * 100 > masterMove.accuracy) return { damage: 0, isCritical: false, effectiveness: 1, missed: true };
 
-            if (masterMove.type !== 'damage' || !masterMove.power) return { damage: 0, isCritical: false, effectiveness: 1 };
+            if (Math.random() * 100 > masterMove.accuracy) return { damage: 0, bpDamage: 0, isCritical: false, effectiveness: 1, missed: true };
+            if (masterMove.type !== 'damage' || !masterMove.power) return { damage: 0, bpDamage: 0, isCritical: false, effectiveness: 1, missed: false };
             
-            let basePower = masterMove.power;
-            if (attacker.battleStatus.ability?.id === 'TECHNICIAN' && basePower <= 60) basePower *= 1.5;
-            if (attacker.battleStatus.comboReady && masterMove.combo === 'finish') basePower *= 2.5;
-
             const isPhysical = masterMove.category === 'Physical';
-            let atkStat = isPhysical 
-                ? attacker.stats.attack * getStatMultiplier(attacker.battleStatus.stat_stages.attack)
-                : attacker.stats.sp_atk * getStatMultiplier(attacker.battleStatus.stat_stages.sp_atk);
-            const defStat = isPhysical
-                ? defender.stats.defense * getStatMultiplier(defender.battleStatus.stat_stages.defense)
-                : defender.stats.sp_def * getStatMultiplier(defender.battleStatus.stat_stages.sp_def);
+            const atkStat = isPhysical ? attacker.stats.attack : attacker.stats.sp_atk;
+            const defStat = isPhysical ? defender.stats.defense : defender.stats.sp_def;
 
-            if (attacker.battleStatus.ability?.id === 'GUTS' && attacker.battleStatus.status && isPhysical) atkStat *= 1.5;
-            if (attacker.battleStatus.isDesperate) atkStat *= 1.25;
-
-            let damage = (((2 * attacker.level / 5 + 2) * atkStat * basePower / defStat) / 50) * 1.4 + 2;
+            let baseDamage = (atkStat * masterMove.power / 100);
+            let damageReduction = defStat / 2;
+            let finalDamage = Math.max(1, baseDamage - damageReduction);
             
             let effectiveness = 1;
             if (move.moveId !== 'STRUGGLE') {
@@ -910,18 +995,29 @@ ${abilityListForPrompt}
             if (move.moveId !== 'STRUGGLE' && attacker.types.some(t => typeTranslations[t] === move.type)) {
                 stab = attacker.battleStatus.ability?.id === 'ADAPTABILITY' ? 2 : 1.5;
             }
-            damage *= effectiveness * stab;
+            finalDamage *= effectiveness * stab;
             
-            damage *= (1 + (turn - 1) * 0.05);
-
-            const isCritical = Math.random() < (attacker.battleStatus.isDesperate ? 0.25 : 0.0625);
-            if (isCritical) damage *= 1.5;
+            const isCritical = Math.random() < 0.0625;
+            if (isCritical) finalDamage *= 1.5;
             
-            let finalDamage = Math.floor(damage * (Math.random() * 0.15 + 0.85));
+            // 브레이크 상태일 때 데미지 증폭
+            if (defender.battleStatus.isBroken) {
+                finalDamage *= 2.5;
+            }
+            
+            // 최소 데미지 보장
+            finalDamage = Math.floor(Math.max(1, finalDamage));
 
-            return { damage: finalDamage, isCritical, effectiveness, missed: false };
+            // BP 데미지 계산
+            let bpDamage = Math.floor(masterMove.power / 4 * effectiveness);
+
+            return { damage: finalDamage, bpDamage: bpDamage, isCritical, effectiveness, missed: false };
         }
 
+        /**
+         * 전투 후 랭크 포인트(Elo) 및 경험치 업데이트
+         * K-factor는 32로 고정.
+         */
         async function updatePostBattleStats(winner, loser) {
             const K = 32;
             const winnerRank = winner.rank_points || 1000;
@@ -932,11 +1028,15 @@ ${abilityListForPrompt}
             
             const xpGained = 50 + (loser.level - winner.level) * 5;
 
+            // Supabase의 RLS(Row Level Security) 정책을 우회하기 위해,
+            // 모든 업데이트를 서버 사이드에서 안전하게 처리하는 단일 RPC 함수를 호출하는 것이 가장 좋습니다.
+            // 여기서는 클라이언트에서 여러 번 호출하지만, RLS가 올바르게 설정되어야 합니다.
+            // (모든 인증된 사용자가 rank_points를 업데이트할 수 있도록 허용)
             const updates = [
+                supabaseClient.from('battle_characters').update({ rank_points: newWinnerRank }).eq('id', winner.id),
+                supabaseClient.from('battle_characters').update({ rank_points: newLoserRank }).eq('id', loser.id),
                 supabaseClient.rpc('update_battle_record', { char_id: winner.id, is_win: true }),
                 supabaseClient.rpc('update_battle_record', { char_id: loser.id, is_win: false }),
-                supabaseClient.from('battle_characters').update({ rank_points: newWinnerRank }).eq('id', winner.id),
-                supabaseClient.from('battle_characters').update({ rank_points: newLoserRank }).eq('id', loser.id)
             ];
 
             if (winner.creator_id === currentUser?.id) {
@@ -945,45 +1045,23 @@ ${abilityListForPrompt}
             
             const results = await Promise.all(updates);
             
-            // Check for errors in any of the promises
             for (const result of results) {
                 if (result && result.error) {
-                    throw new Error(`데이터베이스 업데이트 실패: ${result.error.message}`);
+                    let friendlyError = `데이터베이스 업데이트 실패: ${result.error.message}`;
+                    if(result.error.message.includes('security policy')) {
+                         friendlyError += "\n\n[개발자 팁] Supabase의 RLS(보안 정책) 설정을 확인해주세요. 다른 유저의 랭크를 업데이트할 수 있도록 허용해야 합니다."
+                    }
+                    throw new Error(friendlyError);
                 }
             }
 
             return { newWinnerRank, newLoserRank };
         }
         
-        // --- Helper Functions ---
-        function base64ToBlob(base64, contentType = '', sliceSize = 512) {
-            const byteCharacters = atob(base64.split(',')[1]);
-            const byteArrays = [];
-            for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
-                const slice = byteCharacters.slice(offset, offset + sliceSize);
-                const byteNumbers = new Array(slice.length);
-                for (let i = 0; i < slice.length; i++) byteNumbers[i] = slice.charCodeAt(i);
-                byteArrays.push(new Uint8Array(byteNumbers));
-            }
-            return new Blob(byteArrays, { type: contentType });
-        }
-
-        function convertImageToWebP(base64Png, quality = 0.8) {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    canvas.getContext('2d').drawImage(img, 0, 0);
-                    resolve(canvas.toDataURL('image/webp', quality));
-                };
-                img.onerror = (err) => reject(new Error("Failed to load image for WebP conversion."));
-                img.src = base64Png;
-            });
-        }
+        // =================================================================================
+        // --- 8. 화면 렌더링 함수 (View Rendering Functions) ---
+        // =================================================================================
         
-        // --- Rendering Functions (Optimized) ---
         function createCharacterCard(char, variant = 'default', rank) {
             if (!char || !char.stats) {
                 console.warn("Character with missing data, skipping card render:", char);
@@ -1049,6 +1127,17 @@ ${abilityListForPrompt}
             return card;
         }
 
+        function updatePaginationControls() {
+            paginationControls.innerHTML = '';
+            if (allCharacters.length < totalCharacterCount) {
+                const loadMoreBtn = document.createElement('button');
+                loadMoreBtn.id = 'load-more-btn';
+                loadMoreBtn.className = 'bg-gray-700 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-600';
+                loadMoreBtn.textContent = '더 보기';
+                paginationControls.appendChild(loadMoreBtn);
+            }
+        }
+        
         window.renderPokedexView = function() {
             renderRankingPodium();
             
@@ -1067,190 +1156,146 @@ ${abilityListForPrompt}
             updatePaginationControls();
         };
 
-        async function loadMoreCharacters() {
-            if (isLoadingMore) return;
-            isLoadingMore = true;
-
-            const loadMoreBtn = document.getElementById('load-more-btn');
-            if (loadMoreBtn) {
-                loadMoreBtn.textContent = '불러오는 중...';
-                loadMoreBtn.disabled = true;
-            }
-
-            const from = currentPage * PAGE_SIZE;
-            const to = from + PAGE_SIZE - 1;
-
-            let query = supabaseClient.from('battle_characters')
-                .select('*, profile:battle_profiles(id, nickname, email)', { count: 'exact' })
-                .order('created_at', { ascending: false })
-                .range(from, to);
-            
-            if (activeFilter !== 'all') {
-                query = query.eq('universe', activeFilter);
-            }
-
-            const { data, error, count } = await query;
-
-            if (error) {
-                console.error("Error fetching more characters:", error);
-                showModal('오류', '크리처를 더 불러오는 데 실패했습니다.');
-            } else {
-                totalCharacterCount = count;
-                const newCharacters = data.map(c => ({ ...c.data, id: c.id, created_at: c.created_at, creator_id: c.creator_id, rank_points: c.rank_points, image_url: c.image_url, level: c.level, experience: c.experience, universe: c.universe, profile: c.profile }));
-                allCharacters.push(...newCharacters);
-                currentPage++;
-                renderPokedexView();
-            }
-            isLoadingMore = false;
-        }
-
-        function updatePaginationControls() {
-            paginationControls.innerHTML = '';
-            if (allCharacters.length < totalCharacterCount) {
-                const loadMoreBtn = document.createElement('button');
-                loadMoreBtn.id = 'load-more-btn';
-                loadMoreBtn.className = 'bg-gray-700 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-600';
-                loadMoreBtn.textContent = '더 보기';
-                paginationControls.appendChild(loadMoreBtn);
-            }
-        }
-        
         window.renderDetailView = async function(characterId) {
             detailViewContainer.innerHTML = `<div class="text-center p-8"><h2 class="text-2xl font-bold">크리처 정보 로딩 중...</h2></div>`;
-            const currentId = Number(characterId);
-            detailViewContainer.dataset.id = currentId;
-            
-            let char = allCharacters.find(c => c.id === currentId);
-            if (!char) {
-                const { data, error } = await supabaseClient.from('battle_characters').select('*, profile:battle_profiles(id, nickname, email)').eq('id', currentId).single();
-                if (error || !data) {
-                    detailViewContainer.innerHTML = `<p class="text-center p-8">크리처를 찾을 수 없습니다.</p>`; return;
+            try {
+                const currentId = Number(characterId);
+                detailViewContainer.dataset.id = currentId;
+                
+                let char = allCharacters.find(c => c.id === currentId);
+                if (!char) {
+                    const { data, error } = await supabaseClient.from('battle_characters').select('*, profile:battle_profiles(id, nickname, email)').eq('id', currentId).single();
+                    if (error || !data) { throw new Error('크리처를 찾을 수 없습니다.'); }
+                    char = { ...data.data, id: data.id, created_at: data.created_at, creator_id: data.creator_id, rank_points: data.rank_points, image_url: data.image_url, profile: data.profile, level: data.level, experience: data.experience, universe: data.universe };
                 }
-                char = { ...data.data, id: data.id, created_at: data.created_at, creator_id: data.creator_id, rank_points: data.rank_points, image_url: data.image_url, profile: data.profile, level: data.level, experience: data.experience, universe: data.universe };
-            }
 
-            if (!char.stats) { detailViewContainer.innerHTML = `<p class="text-center p-8">크리처 데이터가 손상되었습니다.</p>`; return; }
+                if (!char.stats) { throw new Error('크리처 데이터가 손상되었습니다.'); }
 
-            const [
-                { data: comments, error: commentsError }, 
-                { data: record, error: recordError }
-            ] = await Promise.all([
-                supabaseClient.from('battle_comments').select('*, profile:battle_profiles(id, nickname, email)').eq('character_id', currentId).order('created_at', { ascending: false }),
-                supabaseClient.from('battle_records').select('wins, losses').eq('character_id', currentId).single()
-            ]);
+                const [
+                    { data: comments, error: commentsError }, 
+                    { data: record, error: recordError }
+                ] = await Promise.all([
+                    supabaseClient.from('battle_comments').select('*, profile:battle_profiles(id, nickname, email)').eq('character_id', currentId).order('created_at', { ascending: false }),
+                    supabaseClient.from('battle_records').select('wins, losses').eq('character_id', currentId).single()
+                ]);
+                if(commentsError) throw commentsError;
 
-            const bst = Object.values(char.stats).reduce((a, b) => a + b, 0);
-            const creatorName = char.profile?.nickname || char.profile?.email?.split('@')[0] || 'Unknown';
-            const imageUrl = `${char.image_url}?width=512&quality=85`;
-            const nextLevelXp = (char.level || 1) * 100;
+                const bst = Object.values(char.stats).reduce((a, b) => a + b, 0);
+                const creatorName = char.profile?.nickname || char.profile?.email?.split('@')[0] || 'Unknown';
+                const imageUrl = `${char.image_url}?width=512&quality=85`;
+                const nextLevelXp = (char.level || 1) * 100;
 
-            detailViewContainer.innerHTML = `
-                <div class="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
-                    <div class="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
-                        <div class="p-6 md:p-8">
-                            <div class="flex flex-col md:flex-row gap-8">
-                                <div class="md:w-1/3 text-center">
-                                    <img src="${imageUrl}" alt="${char.name}" class="w-full h-auto object-cover rounded-lg shadow-lg mx-auto" onerror="this.onerror=null;this.src='https://placehold.co/256x256/e0e0e0/757575?text=Image+Not+Found';">
-                                    ${(currentUser?.id === char.creator_id || currentProfile?.is_admin) ? `<button id="delete-char-btn" class="mt-4 bg-[#c99] text-white font-bold py-2 px-4 rounded-lg w-full">크리처 소멸</button>` : ''}
-                                </div>
-                                <div class="md:w-2/3">
-                                    <h2 class="font-title text-4xl">${char.name} <span class="text-2xl text-gray-400">(${char.universe})</span></h2>
-                                    <div class="flex items-center gap-2 my-2"><span class="rarity-badge rarity-${char.rarity}">${char.rarity}</span><span class="universe-badge universe-${char.universe}">${char.universe}</span></div>
-                                    <div class="flex gap-2 my-3">${char.types.map(t => `<span class="type-badge type-${t}">${typeTranslations[t] || t}</span>`).join('')}</div>
-                                    <p class="text-gray-300 my-4">${char.pokedexEntry}</p>
-                                    <p class="text-sm text-gray-400">소환사: <a href="#" data-profile-id="${char.creator_id}" class="text-[#8abeb7] hover:underline">${creatorName}</a></p>
-                                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mt-4">
-                                        <span><b>키:</b> ${char.height || '?'}m</span>
-                                        <span><b>몸무게:</b> ${char.weight || '?'}kg</span>
-                                        <span><b title="${(MASTER_ABILITY_LIST[char.ability?.id] || {}).text || ''}">특성:</b> ${char.ability?.name || '미정'} ℹ️</span>
-                                        <span><b title="${(UNIVERSE_PASSIVES[char.universe] || {}).text || ''}">종족 패시브:</b> ${(UNIVERSE_PASSIVES[char.universe] || {}).name || '없음'} ℹ️</span>
+                detailViewContainer.innerHTML = `
+                    <div class="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
+                        <div class="bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+                            <div class="p-6 md:p-8">
+                                <div class="flex flex-col md:flex-row gap-8">
+                                    <div class="md:w-1/3 text-center">
+                                        <img src="${imageUrl}" alt="${char.name}" class="w-full h-auto object-cover rounded-lg shadow-lg mx-auto" onerror="this.onerror=null;this.src='https://placehold.co/256x256/e0e0e0/757575?text=Image+Not+Found';">
+                                        ${(currentUser?.id === char.creator_id || currentProfile?.is_admin) ? `<button id="delete-char-btn" class="mt-4 bg-[#c99] text-white font-bold py-2 px-4 rounded-lg w-full">크리처 소멸</button>` : ''}
+                                    </div>
+                                    <div class="md:w-2/3">
+                                        <h2 class="font-title text-4xl">${char.name} <span class="text-2xl text-gray-400">(${char.universe})</span></h2>
+                                        <div class="flex items-center gap-2 my-2"><span class="rarity-badge rarity-${char.rarity}">${char.rarity}</span><span class="universe-badge universe-${char.universe}">${char.universe}</span></div>
+                                        <div class="flex gap-2 my-3">${char.types.map(t => `<span class="type-badge type-${t}">${typeTranslations[t] || t}</span>`).join('')}</div>
+                                        <p class="text-gray-300 my-4">${char.pokedexEntry}</p>
+                                        <p class="text-sm text-gray-400">소환사: <a href="#" data-profile-id="${char.creator_id}" class="text-[#8abeb7] hover:underline">${creatorName}</a></p>
+                                        <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mt-4">
+                                            <span><b>키:</b> ${char.height || '?'}m</span>
+                                            <span><b>몸무게:</b> ${char.weight || '?'}kg</span>
+                                            <span><b title="${(MASTER_ABILITY_LIST[char.ability?.id] || {}).text || ''}">특성:</b> ${char.ability?.name || '미정'} ℹ️</span>
+                                            <span><b title="${(UNIVERSE_PASSIVES[char.universe] || {}).text || ''}">종족 패시브:</b> ${(UNIVERSE_PASSIVES[char.universe] || {}).name || '없음'} ℹ️</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                        <div class="bg-gray-700/50 p-6 md:p-8">
-                            <h3 class="font-bold text-xl mb-4">레벨 및 랭킹 정보</h3>
-                             <div class="mb-4">
-                                 <div class="flex justify-between items-center text-sm font-bold mb-1">
-                                     <span>LV. ${char.level || 1}</span>
-                                     <span class="text-gray-400">${char.experience || 0} / ${nextLevelXp} XP</span>
-                                 </div>
-                                 <div class="w-full bg-gray-600 rounded-full h-2.5">
-                                     <div class="bg-yellow-400 h-2.5 rounded-full" style="width: ${((char.experience || 0) / nextLevelXp) * 100}%"></div>
-                                 </div>
-                             </div>
-                            <div class="flex items-center gap-4">
-                                <span class="text-lg font-bold text-yellow-400">${char.rank_points || 1000} RP</span>
-                                <span class="text-lg font-bold text-gray-300">${record ? `${record.wins}승 ${record.losses}패` : '전적 없음'}</span>
+                            <div class="bg-gray-700/50 p-6 md:p-8">
+                                <h3 class="font-bold text-xl mb-4">레벨 및 랭킹 정보</h3>
+                                <div class="mb-4">
+                                    <div class="flex justify-between items-center text-sm font-bold mb-1">
+                                        <span>LV. ${char.level || 1}</span>
+                                        <span class="text-gray-400">${char.experience || 0} / ${nextLevelXp} XP</span>
+                                    </div>
+                                    <div class="w-full bg-gray-600 rounded-full h-2.5">
+                                        <div class="bg-yellow-400 h-2.5 rounded-full" style="width: ${((char.experience || 0) / nextLevelXp) * 100}%"></div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-4">
+                                    <span class="text-lg font-bold text-yellow-400">${char.rank_points || 1000} RP</span>
+                                    <span class="text-lg font-bold text-gray-300">${record ? `${record.wins}승 ${record.losses}패` : '전적 없음'}</span>
+                                </div>
                             </div>
-                        </div>
-                        <div class="bg-gray-800 p-6 md:p-8">
-                            <h3 class="font-bold text-xl mb-4">능력치 (총합: ${bst})</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
-                                ${Object.entries(char.stats).map(([stat, value]) => `<div class="flex items-center gap-2 text-sm"><span class="w-16 font-semibold text-gray-400">${{hp:'HP', attack:'공격', defense:'방어', sp_atk:'특공', sp_def:'특방', speed:'속도'}[stat]}</span><div class="flex-1 stat-bar-bg"><div class="stat-bar h-3 bg-[#8abeb7]" style="width: ${Math.min(100, (value / (stat === 'hp' ? 300 : 150)) * 100)}%;"></div></div><span class="w-8 text-right font-bold">${value}</span></div>`).join('')}
+                            <div class="bg-gray-800 p-6 md:p-8">
+                                <h3 class="font-bold text-xl mb-4">능력치 (총합: ${bst})</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-2">
+                                    ${Object.entries(char.stats).map(([stat, value]) => `<div class="flex items-center gap-2 text-sm"><span class="w-16 font-semibold text-gray-400">${{hp:'HP', attack:'공격', defense:'방어', sp_atk:'특공', sp_def:'특방', speed:'속도'}[stat]}</span><div class="flex-1 stat-bar-bg"><div class="stat-bar h-3 bg-[#8abeb7]" style="width: ${Math.min(100, (value / (stat === 'hp' ? 300 : 150)) * 100)}%;"></div></div><span class="w-8 text-right font-bold">${value}</span></div>`).join('')}
+                                </div>
                             </div>
-                        </div>
-                        <div class="bg-gray-700/50 p-6 md:p-8">
-                            <h3 class="font-bold text-xl mb-4">기술</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                ${char.moves.map(move => {
-                                    const masterMove = MASTER_SKILL_LIST[move.moveId] || {};
-                                    return `<div class="p-4 rounded-lg bg-gray-900/50 border border-gray-700">
-                                        <p class="font-bold">${move.name} <span class="type-badge type-${Object.keys(typeTranslations).find(key => typeTranslations[key] === move.type) || move.type}">${move.type}</span></p>
-                                        <p class="text-sm text-gray-400 mt-1">${move.description}</p>
-                                        <div class="text-xs mt-2 grid grid-cols-2 gap-1 text-gray-300">
-                                            <span><b>위력:</b> ${masterMove.power || '—'}</span>
-                                            <span><b>분류:</b> ${masterMove.category || '기타'}</span>
-                                            <span><b>명중률:</b> ${masterMove.accuracy || '—'}</span>
-                                            <span><b>PP:</b> ${masterMove.pp || '—'}</span>
-                                        </div>
-                                    </div>`
-                                }).join('')}
+                            <div class="bg-gray-700/50 p-6 md:p-8">
+                                <h3 class="font-bold text-xl mb-4">기술</h3>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    ${char.moves.map(move => {
+                                        const masterMove = MASTER_SKILL_LIST[move.moveId] || {};
+                                        return `<div class="p-4 rounded-lg bg-gray-900/50 border border-gray-700">
+                                            <p class="font-bold">${move.name} <span class="type-badge type-${Object.keys(typeTranslations).find(key => typeTranslations[key] === move.type) || move.type}">${move.type}</span></p>
+                                            <p class="text-sm text-gray-400 mt-1">${move.description}</p>
+                                            <div class="text-xs mt-2 grid grid-cols-2 gap-1 text-gray-300">
+                                                <span><b>위력:</b> ${masterMove.power || '—'}</span>
+                                                <span><b>분류:</b> ${masterMove.category || '기타'}</span>
+                                                <span><b>명중률:</b> ${masterMove.accuracy || '—'}</span>
+                                                <span><b>PP:</b> ${masterMove.pp || '—'}</span>
+                                            </div>
+                                        </div>`
+                                    }).join('')}
+                                </div>
                             </div>
-                        </div>
-                        <div class="bg-gray-800 p-6 md:p-8">
-                            <h3 class="font-bold text-xl mb-4">댓글</h3>
-                            ${currentUser ? `<form id="comment-form" class="flex gap-2 mb-6"><input id="comment-input" type="text" placeholder="댓글을 입력하세요..." class="flex-1 p-2 border rounded-lg bg-gray-700 text-white border-gray-600" required><button type="submit" class="bg-[#8abeb7] text-white font-bold py-2 px-4 rounded-lg">등록</button></form>` : '<p class="text-center text-gray-500">댓글을 작성하려면 <a href="#" onclick="event.preventDefault(); navigateTo(\'auth-view\')" class="text-[#8abeb7] hover:underline">로그인</a>이 필요합니다.</p>'}
-                            <div id="comments-container" class="space-y-4">${comments && comments.length > 0 ? comments.map(c => `<div class="flex gap-3"><div class="flex-1 bg-gray-900/50 p-3 rounded-lg border border-gray-700"><p class="text-sm">${c.content}</p><div class="text-xs text-gray-500 mt-2"><span>작성자: ${c.profile?.nickname || c.profile?.email?.split('@')[0]}</span><span class="mx-2">|</span><span>${new Date(c.created_at).toLocaleString()}</span></div></div>${(currentUser?.id === c.user_id || currentProfile?.is_admin) ? `<button data-comment-id="${c.id}" class="delete-comment-btn self-start text-red-500 hover:text-red-700 text-2xl">&times;</button>` : ''}</div>`).join('') : '<p class="text-center text-gray-500">아직 댓글이 없습니다.</p>'}</div>
+                            <div class="bg-gray-800 p-6 md:p-8">
+                                <h3 class="font-bold text-xl mb-4">댓글</h3>
+                                ${currentUser ? `<form id="comment-form" class="flex gap-2 mb-6"><input id="comment-input" type="text" placeholder="댓글을 입력하세요..." class="flex-1 p-2 border rounded-lg bg-gray-700 text-white border-gray-600" required><button type="submit" class="bg-[#8abeb7] text-white font-bold py-2 px-4 rounded-lg">등록</button></form>` : '<p class="text-center text-gray-500">댓글을 작성하려면 <a href="#" onclick="event.preventDefault(); navigateTo(\'auth-view\')" class="text-[#8abeb7] hover:underline">로그인</a>이 필요합니다.</p>'}
+                                <div id="comments-container" class="space-y-4">${comments && comments.length > 0 ? comments.map(c => `<div class="flex gap-3"><div class="flex-1 bg-gray-900/50 p-3 rounded-lg border border-gray-700"><p class="text-sm">${c.content}</p><div class="text-xs text-gray-500 mt-2"><span>작성자: ${c.profile?.nickname || c.profile?.email?.split('@')[0]}</span><span class="mx-2">|</span><span>${new Date(c.created_at).toLocaleString()}</span></div></div>${(currentUser?.id === c.user_id || currentProfile?.is_admin) ? `<button data-comment-id="${c.id}" class="delete-comment-btn self-start text-red-500 hover:text-red-700 text-2xl">&times;</button>` : ''}</div>`).join('') : '<p class="text-center text-gray-500">아직 댓글이 없습니다.</p>'}</div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `;
-            
-            detailViewContainer.querySelector('[data-profile-id]')?.addEventListener('click', (e) => { e.stopPropagation(); navigateTo('profile-view', e.target.dataset.profileId); });
-            
-            if (currentUser?.id === char.creator_id || currentProfile?.is_admin) {
-                document.getElementById('delete-char-btn').onclick = () => {
-                    showModal('크리처 소멸 확인', `<p><strong>${char.name}</strong>을(를) 정말로 소멸시키겠습니까? 이 작업은 되돌릴 수 없습니다.</p>`, async () => {
-                         const { error: deleteStorageError } = await supabaseClient.storage.from('battle_images').remove([char.image_url.split('/').slice(-2).join('/')]);
-                         if(deleteStorageError) console.error("Error deleting storage object:", deleteStorageError);
-                        const { error } = await supabaseClient.from('battle_characters').delete().eq('id', char.id);
-                        if (error) { showModal('삭제 오류', `<p>${error.message}</p>`); }
-                        else { navigateTo('pokedex-view'); }
-                    });
-                };
-            }
+                `;
+                
+                detailViewContainer.querySelector('[data-profile-id]')?.addEventListener('click', (e) => { e.stopPropagation(); navigateTo('profile-view', e.target.dataset.profileId); });
+                
+                if (currentUser?.id === char.creator_id || currentProfile?.is_admin) {
+                    document.getElementById('delete-char-btn').onclick = () => {
+                        showModal('크리처 소멸 확인', `<p><strong>${char.name}</strong>을(를) 정말로 소멸시키겠습니까? 이 작업은 되돌릴 수 없습니다.</p>`, async () => {
+                            const { error: deleteStorageError } = await supabaseClient.storage.from('battle_images').remove([char.image_url.split('/').slice(-2).join('/')]);
+                            if(deleteStorageError) console.error("Error deleting storage object:", deleteStorageError);
+                            const { error } = await supabaseClient.from('battle_characters').delete().eq('id', char.id);
+                            if (error) { showModal('삭제 오류', `<p>${error.message}</p>`); }
+                            else { navigateTo('pokedex-view'); }
+                        });
+                    };
+                }
 
-            if (currentUser) {
-                document.getElementById('comment-form').onsubmit = async (e) => {
-                    e.preventDefault();
-                    const content = document.getElementById('comment-input').value;
-                    if (!content.trim()) return;
-                    const { error } = await supabaseClient.from('battle_comments').insert({ character_id: char.id, user_id: currentUser.id, content });
-                    if (error) { showModal('댓글 등록 오류', `<p>${error.message}</p>`); }
-                    else { document.getElementById('comment-input').value = ''; renderDetailView(characterId); }
-                };
+                if (currentUser) {
+                    document.getElementById('comment-form').onsubmit = async (e) => {
+                        e.preventDefault();
+                        const content = document.getElementById('comment-input').value;
+                        if (!content.trim()) return;
+                        const { error } = await supabaseClient.from('battle_comments').insert({ character_id: char.id, user_id: currentUser.id, content });
+                        if (error) { showModal('댓글 등록 오류', `<p>${error.message}</p>`); }
+                        else { document.getElementById('comment-input').value = ''; renderDetailView(characterId); }
+                    };
+                }
+                
+                document.querySelectorAll('.delete-comment-btn').forEach(btn => {
+                    btn.onclick = () => {
+                        showModal('댓글 삭제 확인', '<p>정말로 이 댓글을 삭제하시겠습니까?</p>', async () => {
+                            const { error } = await supabaseClient.from('battle_comments').delete().eq('id', btn.dataset.commentId);
+                            if (error) { showModal('삭제 오류', `<p>${error.message}</p>`); }
+                            else { renderDetailView(characterId); }
+                        });
+                    };
+                });
+            } catch (err) {
+                console.error("Error rendering detail view:", err);
+                detailViewContainer.innerHTML = `<p class="text-center p-8 text-red-400">크리처 정보를 불러오는 데 실패했습니다: ${err.message}</p>`;
             }
-            
-            document.querySelectorAll('.delete-comment-btn').forEach(btn => {
-                btn.onclick = () => {
-                    showModal('댓글 삭제 확인', '<p>정말로 이 댓글을 삭제하시겠습니까?</p>', async () => {
-                        const { error } = await supabaseClient.from('battle_comments').delete().eq('id', btn.dataset.commentId);
-                        if (error) { showModal('삭제 오류', `<p>${error.message}</p>`); }
-                        else { renderDetailView(characterId); }
-                    });
-                };
-            });
         };
 
         window.renderBattleSelectionView = async function() {
@@ -1336,19 +1381,25 @@ ${abilityListForPrompt}
              isAutoBattleRunning = false;
              let battleLog = [];
 
-             const initBattleState = (char) => ({
-                 ...JSON.parse(JSON.stringify(char)),
-                 battleStatus: {
-                     currentHp: char.stats.hp,
-                     maxHp: char.stats.hp,
-                     status: null,
-                     stat_stages: { attack: 0, defense: 0, sp_atk: 0, sp_def: 0, speed: 0 },
-                     isDesperate: false,
-                     comboReady: false,
-                     ability: MASTER_ABILITY_LIST[char.ability?.id] ? { ...MASTER_ABILITY_LIST[char.ability?.id], id: char.ability.id } : null,
-                     currentPP: Object.fromEntries(char.moves.map(m => [m.moveId, MASTER_SKILL_LIST[m.moveId]?.pp || 5]))
-                 }
-             });
+             const initBattleState = (char) => {
+                const maxBp = Math.floor((char.stats.defense + char.stats.sp_def) / 2);
+                return {
+                    ...JSON.parse(JSON.stringify(char)),
+                    battleStatus: {
+                        currentHp: char.stats.hp,
+                        maxHp: char.stats.hp,
+                        currentBp: maxBp,
+                        maxBp: maxBp,
+                        isBroken: false,
+                        status: null,
+                        stat_stages: { attack: 0, defense: 0, sp_atk: 0, sp_def: 0, speed: 0 },
+                        isDesperate: false,
+                        comboReady: false,
+                        ability: MASTER_ABILITY_LIST[char.ability?.id] ? { ...MASTER_ABILITY_LIST[char.ability?.id], id: char.ability.id } : null,
+                        currentPP: Object.fromEntries(char.moves.map(m => [m.moveId, MASTER_SKILL_LIST[m.moveId]?.pp || 5]))
+                    }
+                }
+            };
 
              let playerState = initBattleState(player);
              let opponentState = initBattleState(opponent);
@@ -1395,13 +1446,17 @@ ${abilityListForPrompt}
              function updateUI() {
                 const renderCharUI = (charState, el) => {
                     const hpPercent = (charState.battleStatus.currentHp / charState.battleStatus.maxHp) * 100;
+                    const bpPercent = (charState.battleStatus.currentBp / charState.battleStatus.maxBp) * 100;
                     el.innerHTML = `
                         <div class="flex justify-between items-center font-bold text-sm">
                             <span>${charState.name} <span class="text-gray-400">Lv.${charState.level || 1}</span></span>
                             <span>HP: ${charState.battleStatus.currentHp} / ${charState.battleStatus.maxHp}</span>
                         </div>
-                        <div class="w-full bg-gray-600 rounded-full h-4 mt-1 border border-black/50">
+                        <div class="w-full bg-gray-600 rounded-full h-3 mt-1 border border-black/50">
                             <div class="hp-bar-inner h-full rounded-full ${hpPercent > 50 ? 'bg-green-500' : hpPercent > 20 ? 'bg-yellow-500' : 'bg-red-500'}" style="width: ${hpPercent}%"></div>
+                        </div>
+                        <div class="w-full bg-gray-800 rounded-full h-2 mt-1 border border-black/50">
+                            <div class="bp-bar-inner h-full rounded-full bg-cyan-400" style="width: ${bpPercent}%"></div>
                         </div>
                     `;
                 };
@@ -1472,34 +1527,39 @@ ${abilityListForPrompt}
                     .filter(move => attacker.battleStatus.currentPP[move.moveId] > 0 && move.master);
 
                 if (availableMoves.length === 0) return { moveId: 'STRUGGLE', name: '발버둥' };
-
-                let bestMove = null;
-                let maxDamage = -1;
-
+                
+                // 1. 상대가 브레이크 상태면 가장 강한 기술 사용
+                if(defender.battleStatus.isBroken) {
+                    return availableMoves.filter(m => m.master.type === 'damage').sort((a,b) => b.master.power - a.master.power)[0] || availableMoves[0];
+                }
+                
+                // 2. 상대를 브레이크 시킬 수 있는 기술이 있다면 사용
                 for (const move of availableMoves) {
                     if (move.master.type === 'damage') {
-                        const { damage } = calculateDamage(attacker, defender, move, turn);
-                        if (damage >= defender.battleStatus.currentHp) {
-                            return attacker.moves.find(m => m.moveId === move.moveId);
-                        }
-                    }
-                }
-
-                for (const move of availableMoves) {
-                     if (move.master.type === 'damage') {
-                        const { damage } = calculateDamage(attacker, defender, move, turn);
-                        if (damage > maxDamage) {
-                            maxDamage = damage;
-                            bestMove = move;
-                        }
+                         const { bpDamage } = calculateDamage(attacker, defender, move);
+                         if(defender.battleStatus.currentBp - bpDamage <= 0) {
+                             return move;
+                         }
                     }
                 }
                 
-                if (bestMove) {
-                    return attacker.moves.find(m => m.moveId === bestMove.moveId);
+                // 3. 상성이 유리하고 가장 강력한 기술 사용
+                let bestMove = null;
+                let maxScore = -Infinity;
+                for (const move of availableMoves) {
+                    if (move.master.type === 'damage') {
+                         const { effectiveness } = calculateDamage(attacker, defender, move);
+                         const score = move.master.power * effectiveness;
+                         if (score > maxScore) {
+                             maxScore = score;
+                             bestMove = move;
+                         }
+                    }
                 }
-
-                return attacker.moves.find(m => m.moveId === availableMoves[Math.floor(Math.random() * availableMoves.length)].moveId);
+                if(bestMove) return bestMove;
+                
+                // 4. 위 조건에 맞는 기술이 없으면 무작위 선택
+                return availableMoves[Math.floor(Math.random() * availableMoves.length)];
             }
 
 
@@ -1516,21 +1576,27 @@ ${abilityListForPrompt}
                 updateUI();
                 await new Promise(res => setTimeout(res, 500));
 
-                const playerSpeed = playerState.stats.speed * getStatMultiplier(playerState.battleStatus.stat_stages.speed);
-                const opponentSpeed = opponentState.stats.speed * getStatMultiplier(opponentState.battleStatus.stat_stages.speed);
+                const playerSpeed = playerState.stats.speed;
+                const opponentSpeed = opponentState.stats.speed;
                 
                 let firstAttacker, secondAttacker, firstMove, secondMove;
-                const playerMovePrio = MASTER_SKILL_LIST[playerMove.moveId]?.priority || 0;
-                const opponentMovePrio = opponentMove ? MASTER_SKILL_LIST[opponentMove.moveId]?.priority || 0 : -1;
                 
-                if (playerMovePrio > opponentMovePrio || (playerMovePrio === opponentMovePrio && playerSpeed >= opponentSpeed)) {
+                if (playerSpeed >= opponentSpeed) {
                     [firstAttacker, secondAttacker, firstMove, secondMove] = [playerState, opponentState, playerMove, opponentMove];
                 } else {
                     [firstAttacker, secondAttacker, firstMove, secondMove] = [opponentState, playerState, opponentMove, playerMove];
                 }
-
+                
                 const processAttack = async (attacker, defender, move) => {
                      if (!move) return false;
+                     // 턴 시작 시 브레이크 상태 해제
+                     if (attacker.battleStatus.isBroken) {
+                         attacker.battleStatus.isBroken = false;
+                         dom[attacker.id === playerState.id ? 'playerSprite' : 'opponentSprite'].classList.remove('broken');
+                         addToLog(`${attacker.name}이(가) 정신을 차렸다!`);
+                         await new Promise(res => setTimeout(res, 800));
+                     }
+
                      const attackerSprite = (attacker.id === playerState.id) ? dom.playerSprite : dom.opponentSprite;
                      const defenderSprite = (defender.id === playerState.id) ? dom.playerSprite : dom.opponentSprite;
                      
@@ -1539,17 +1605,20 @@ ${abilityListForPrompt}
                      anime({ targets: attackerSprite, translateX: [0, (attacker.id === playerState.id ? 20 : -20), 0], duration: 400, easing: 'easeInOutSine' });
                      await new Promise(res => setTimeout(res, 400));
                      
-                     const result = calculateDamage(attacker, defender, move, turn);
+                     const result = calculateDamage(attacker, defender, move);
                      
                      if (result.missed) {
                          addToLog('...하지만 빗나갔다!');
                      } else {
                          defender.battleStatus.currentHp = Math.max(0, defender.battleStatus.currentHp - result.damage);
+                         defender.battleStatus.currentBp = Math.max(0, defender.battleStatus.currentBp - result.bpDamage);
+                         
                          let effectivenessText = '';
                          if(result.effectiveness > 1) { effectivenessText = '효과는 굉장했다!'; playSuperEffectiveSound(); }
                          else if(result.effectiveness < 1 && result.effectiveness > 0) effectivenessText = '효과가 별로인 듯하다...';
                          else if(result.effectiveness === 0) effectivenessText = '효과가 없는 것 같다...';
                          if(result.isCritical) { effectivenessText += ' 급소에 맞았다!'; playCritSound(); }
+                         if(defender.battleStatus.isBroken) { effectivenessText += ' [브레이크] 추가 데미지!'; }
                          
                          anime({ targets: defenderSprite, translateX: [0, (Math.random() - 0.5) * 10, 0], translateY: [0, (Math.random() - 0.5) * 10, 0], duration: 100, easing: 'linear', direction: 'alternate', loop: 2 });
                          playHitSound();
@@ -1560,11 +1629,12 @@ ${abilityListForPrompt}
                              const recoilDamage = Math.floor(attacker.battleStatus.maxHp / 4);
                              attacker.battleStatus.currentHp = Math.max(0, attacker.battleStatus.currentHp - recoilDamage);
                              addToLog(`${attacker.name}은(는) 반동으로 데미지를 입었다!`);
-                             if (attacker.battleStatus.currentHp <= 0) {
-                                 updateUI();
-                                 await new Promise(res => setTimeout(res, 1000));
-                                 return 'attacker_fainted';
-                             }
+                         }
+                         
+                         if(defender.battleStatus.currentBp <= 0 && !defender.battleStatus.isBroken) {
+                            defender.battleStatus.isBroken = true;
+                            defenderSprite.classList.add('broken');
+                            addToLog(`${defender.name}의 코어가 파괴되어 [브레이크] 상태가 되었다!`);
                          }
                      }
                      updateUI();
@@ -1573,29 +1643,41 @@ ${abilityListForPrompt}
                 };
 
                 const firstAttackResult = await processAttack(firstAttacker, secondAttacker, firstMove);
-                if (firstAttackResult === 'defender_fainted') {
+                if (firstAttackResult) {
                     addToLog(`${secondAttacker.name}은(는) 쓰러졌다!`);
                     await handleBattleEnd(firstAttacker, secondAttacker);
                     return;
-                } else if (firstAttackResult === 'attacker_fainted') {
-                     addToLog(`${firstAttacker.name}은(는) 쓰러졌다!`);
-                     await handleBattleEnd(secondAttacker, firstAttacker);
-                     return;
                 }
 
                 if (secondMove) {
                      const secondAttackResult = await processAttack(secondAttacker, firstAttacker, secondMove);
-                     if (secondAttackResult === 'defender_fainted') {
+                     if (secondAttackResult) {
                         addToLog(`${firstAttacker.name}은(는) 쓰러졌다!`);
                         await handleBattleEnd(secondAttacker, firstAttacker);
-                        return;
-                    } else if (secondAttackResult === 'attacker_fainted') {
-                        addToLog(`${secondAttacker.name}은(는) 쓰러졌다!`);
-                        await handleBattleEnd(firstAttacker, secondAttacker);
                         return;
                     }
                 }
                 
+                // 턴 종료 시 코즈믹 오버로드 데미지
+                if(turn >= 15) {
+                    const overloadDamage = Math.floor(playerState.battleStatus.maxHp * 0.05 * (turn - 14));
+                    playerState.battleStatus.currentHp = Math.max(0, playerState.battleStatus.currentHp - overloadDamage);
+                    opponentState.battleStatus.currentHp = Math.max(0, opponentState.battleStatus.currentHp - overloadDamage);
+                    addToLog(`코즈믹 오버로드로 모든 크리처가 ${overloadDamage}의 피해를 입었다!`);
+                    updateUI();
+                    await new Promise(res => setTimeout(res, 1000));
+                    if(playerState.battleStatus.currentHp <= 0) {
+                        addToLog(`${playerState.name}은(는) 쓰러졌다!`);
+                        await handleBattleEnd(opponentState, playerState);
+                        return;
+                    }
+                    if(opponentState.battleStatus.currentHp <= 0) {
+                        addToLog(`${opponentState.name}은(는) 쓰러졌다!`);
+                        await handleBattleEnd(playerState, opponentState);
+                        return;
+                    }
+                }
+
                 isProcessingTurn = false;
                 turn++;
                 updateUI();
@@ -1615,7 +1697,12 @@ ${abilityListForPrompt}
                 }
                 
                 const bestMove = opponentAiSelectMove(playerState, opponentState);
-                executeTurn(bestMove.moveId);
+                if (bestMove && bestMove.moveId) {
+                    executeTurn(bestMove.moveId);
+                } else {
+                    console.error("AI failed to select a move. Falling back to STRUGGLE.", bestMove);
+                    executeTurn('STRUGGLE');
+                }
             }
              
              dom.movesContainer.addEventListener('click', (e) => {
@@ -1700,121 +1787,123 @@ ${abilityListForPrompt}
 
         window.renderProfileView = async function(profileId) {
             profileViewContainer.innerHTML = `<div class="text-center p-8"><h2 class="text-2xl font-bold">프로필 로딩 중...</h2></div>`;
-            const profile = allProfiles.find(p => p.id === profileId);
-            if (!profile) { profileViewContainer.innerHTML = `<p class="text-center p-8">프로필을 찾을 수 없습니다.</p>`; return; }
-            
-            const { data: userCharsData, error } = await supabaseClient.from('battle_characters')
-                .select('*, profile:battle_profiles(id, nickname, email)')
-                .eq('creator_id', profileId)
-                .order('rank_points', { ascending: false });
-            
-            if (error) {
-                profileViewContainer.innerHTML = `<p class="text-center p-8">캐릭터 목록을 불러오는 데 실패했습니다.</p>`;
-                return;
-            }
-            
-            const userCharacters = userCharsData.map(c => ({ ...c.data, id: c.id, created_at: c.created_at, creator_id: c.creator_id, rank_points: c.rank_points, image_url: c.image_url, profile: c.profile, level: c.level, experience: c.experience, universe: c.universe }));
-            const isMyProfile = currentUser?.id === profileId;
+            try {
+                const profile = allProfiles.find(p => p.id === profileId);
+                if (!profile) { throw new Error('프로필을 찾을 수 없습니다.'); }
+                
+                const { data: userCharsData, error } = await supabaseClient.from('battle_characters')
+                    .select('*, profile:battle_profiles(id, nickname, email)')
+                    .eq('creator_id', profileId)
+                    .order('rank_points', { ascending: false });
+                
+                if (error) { throw error; }
+                
+                const userCharacters = userCharsData.map(c => ({ ...c.data, id: c.id, created_at: c.created_at, creator_id: c.creator_id, rank_points: c.rank_points, image_url: c.image_url, profile: c.profile, level: c.level, experience: c.experience, universe: c.universe }));
+                const isMyProfile = currentUser?.id === profileId;
 
-            profileViewContainer.innerHTML = `
-                <div class="max-w-4xl mx-auto p-4">
-                    <div class="bg-gray-800 p-6 rounded-lg shadow-md mb-6">
-                        <h2 class="text-2xl font-bold mb-4">소환사의 성소</h2>
-                        <div class="space-y-4">
-                            <div class="text-center mb-4">
-                                <p class="text-lg text-gray-400">칭호</p>
-                                <p class="text-2xl font-bold text-yellow-300" style="text-shadow: 0 0 5px #fde047;">💎 제네시스 소환사 💎</p>
-                            </div>
-                            <div><span class="font-semibold">이메일:</span> ${profile.email}</div>
-                            <div class="flex items-center gap-2"><span class="font-semibold">닉네임:</span> <span id="nickname-display">${profile.nickname || '미설정'}</span> ${isMyProfile ? `<button id="edit-nickname-btn" class="text-sm text-[#8abeb7]">변경</button>` : ''}</div>
-                            <div id="nickname-edit-form" class="hidden"><input type="text" id="nickname-input" value="${profile.nickname || ''}" class="p-1 border rounded bg-gray-700 border-gray-600"><button id="save-nickname-btn" class="ml-2 bg-green-500 text-white px-2 py-1 rounded">저장</button></div>
-                            <div><span class="font-semibold">보유 크레딧:</span> ${isMyProfile ? currentProfile.credits : '비공개'}</div>
-                            ${isMyProfile ? `
-                                <div class="flex items-center gap-4">
-                                    <span class="font-semibold">자동 전투 기본 설정</span>
-                                    <label class="toggle-switch">
-                                        <input type="checkbox" id="auto-battle-toggle" ${currentProfile.auto_battle_enabled ? 'checked' : ''}>
-                                        <span class="slider"></span>
-                                    </label>
+                profileViewContainer.innerHTML = `
+                    <div class="max-w-4xl mx-auto p-4">
+                        <div class="bg-gray-800 p-6 rounded-lg shadow-md mb-6">
+                            <h2 class="text-2xl font-bold mb-4">소환사의 성소</h2>
+                            <div class="space-y-4">
+                                <div class="text-center mb-4">
+                                    <p class="text-lg text-gray-400">칭호</p>
+                                    <p class="text-2xl font-bold text-yellow-300" style="text-shadow: 0 0 5px #fde047;">💎 제네시스 소환사 💎</p>
                                 </div>
-                                <div class="bg-gray-700/50 p-4 rounded-lg">
-                                    <h3 class="font-semibold mb-2">이메일 주소 변경</h3>
-                                    <form id="change-email-form" class="flex gap-2">
-                                        <input type="email" id="new-email-input" class="flex-1 p-2 border rounded-lg bg-gray-700 text-white border-gray-600" placeholder="새 이메일 주소" required>
-                                        <button type="submit" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">인증메일 발송</button>
-                                    </form>
+                                <div><span class="font-semibold">이메일:</span> ${profile.email}</div>
+                                <div class="flex items-center gap-2"><span class="font-semibold">닉네임:</span> <span id="nickname-display">${profile.nickname || '미설정'}</span> ${isMyProfile ? `<button id="edit-nickname-btn" class="text-sm text-[#8abeb7]">변경</button>` : ''}</div>
+                                <div id="nickname-edit-form" class="hidden"><input type="text" id="nickname-input" value="${profile.nickname || ''}" class="p-1 border rounded bg-gray-700 border-gray-600"><button id="save-nickname-btn" class="ml-2 bg-green-500 text-white px-2 py-1 rounded">저장</button></div>
+                                <div><span class="font-semibold">보유 크레딧:</span> ${isMyProfile ? currentProfile.credits : '비공개'}</div>
+                                ${isMyProfile ? `
+                                    <div class="flex items-center gap-4">
+                                        <span class="font-semibold">자동 전투 기본 설정</span>
+                                        <label class="toggle-switch">
+                                            <input type="checkbox" id="auto-battle-toggle" ${currentProfile.auto_battle_enabled ? 'checked' : ''}>
+                                            <span class="slider"></span>
+                                        </label>
+                                    </div>
+                                    <div class="bg-gray-700/50 p-4 rounded-lg">
+                                        <h3 class="font-semibold mb-2">이메일 주소 변경</h3>
+                                        <form id="change-email-form" class="flex gap-2">
+                                            <input type="email" id="new-email-input" class="flex-1 p-2 border rounded-lg bg-gray-700 text-white border-gray-600" placeholder="새 이메일 주소" required>
+                                            <button type="submit" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">인증메일 발송</button>
+                                        </form>
+                                    </div>
+                                    <button id="check-in-btn" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg w-full">출석 체크 (1 크레딧 획득)</button>
+                                ` : ''}
+                                <div class="text-center p-4 border border-dashed border-gray-600 rounded-lg mt-4">
+                                    <p class="text-gray-500 font-bold">소환사 의회</p>
+                                    <p class="text-sm text-gray-600">랭킹 100위 이내 달성 시 초대됩니다. (출시 예정)</p>
                                 </div>
-                                <button id="check-in-btn" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg w-full">출석 체크 (1 크레딧 획득)</button>
-                            ` : ''}
-                             <div class="text-center p-4 border border-dashed border-gray-600 rounded-lg mt-4">
-                                <p class="text-gray-500 font-bold">소환사 의회</p>
-                                <p class="text-sm text-gray-600">랭킹 100위 이내 달성 시 초대됩니다. (출시 예정)</p>
                             </div>
                         </div>
+                        <h2 class="text-2xl font-bold mb-4">나의 크리처 목록 (${userCharacters.length}개)</h2>
+                        <div id="profile-char-list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                            ${userCharacters.length > 0 ? '' : '<p>아직 소환한 크리처가 없습니다.</p>'}
+                        </div>
                     </div>
-                    <h2 class="text-2xl font-bold mb-4">나의 크리처 목록 (${userCharacters.length}개)</h2>
-                    <div id="profile-char-list" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                        ${userCharacters.length > 0 ? '' : '<p>아직 소환한 크리처가 없습니다.</p>'}
-                    </div>
-                </div>
-            `;
-            
-            const listContainer = document.getElementById('profile-char-list');
-            userCharacters.forEach(char => listContainer.appendChild(createCharacterCard(char, 'default')));
+                `;
+                
+                const listContainer = document.getElementById('profile-char-list');
+                userCharacters.forEach(char => listContainer.appendChild(createCharacterCard(char, 'default')));
 
-            if (isMyProfile) {
-                document.getElementById('edit-nickname-btn').onclick = () => {
-                    document.getElementById('nickname-display').classList.add('hidden');
-                    document.getElementById('edit-nickname-btn').classList.add('hidden');
-                    document.getElementById('nickname-edit-form').classList.remove('hidden');
-                };
-                document.getElementById('save-nickname-btn').onclick = async () => {
-                    const newNickname = document.getElementById('nickname-input').value.trim();
-                    if (newNickname) {
-                        const { error } = await supabaseClient.from('battle_profiles').update({ nickname: newNickname }).eq('id', currentUser.id);
-                        if (error) { showModal('오류', `<p>닉네임 변경 실패: ${error.message}</p>`); }
-                        else { 
-                            currentProfile.nickname = newNickname;
-                            renderProfileView(profileId);
+                if (isMyProfile) {
+                    document.getElementById('edit-nickname-btn').onclick = () => {
+                        document.getElementById('nickname-display').classList.add('hidden');
+                        document.getElementById('edit-nickname-btn').classList.add('hidden');
+                        document.getElementById('nickname-edit-form').classList.remove('hidden');
+                    };
+                    document.getElementById('save-nickname-btn').onclick = async () => {
+                        const newNickname = document.getElementById('nickname-input').value.trim();
+                        if (newNickname) {
+                            const { error } = await supabaseClient.from('battle_profiles').update({ nickname: newNickname }).eq('id', currentUser.id);
+                            if (error) { showModal('오류', `<p>닉네임 변경 실패: ${error.message}</p>`); }
+                            else { 
+                                currentProfile.nickname = newNickname;
+                                renderProfileView(profileId);
+                            }
                         }
-                    }
-                };
-                 document.getElementById('auto-battle-toggle').onchange = async (e) => {
-                     const enabled = e.target.checked;
-                     const { error } = await supabaseClient.from('battle_profiles').update({ auto_battle_enabled: enabled }).eq('id', currentUser.id);
-                     if (error) { 
-                         showModal('오류', `<p>설정 저장 실패: ${error.message}</p><p>데이터베이스 RLS 정책이 올바르게 설정되었는지 확인해주세요.</p>`);
-                         e.target.checked = !enabled; // Revert checkbox on error
-                     } else {
-                         currentProfile.auto_battle_enabled = enabled;
-                     }
-                 };
-                 document.getElementById('change-email-form').onsubmit = async (e) => {
-                     e.preventDefault();
-                     const newEmail = document.getElementById('new-email-input').value;
-                     const { error } = await supabaseClient.auth.updateUser(
-                         { email: newEmail },
-                         { emailRedirectTo: 'https://07150906.vercel.app' }
-                     );
-                     if (error) {
-                         showModal('이메일 변경 오류', `<p>${error.message}</p>`);
-                     } else {
-                         showModal('확인메일 발송', `<p><strong>${newEmail}</strong>(으)로 이메일 변경 확인 메일을 보냈습니다. 이메일을 확인해주세요.</p>`);
-                     }
-                 };
-                document.getElementById('check-in-btn').onclick = async () => {
-                    const today = new Date().toISOString().split('T')[0];
-                    if (currentProfile.last_check_in === today) {
-                        showModal('출석 체크', '<p>오늘은 이미 출석했습니다.</p>'); return;
-                    }
-                    if(currentProfile.credits >= 5) {
-                        showModal('크레딧 최대', '<p>무료 크레딧은 최대 5개까지 보유할 수 있습니다.</p>'); return;
-                    }
-                    const newCredits = currentProfile.credits + 1;
-                    const { error } = await supabaseClient.from('battle_profiles').update({ credits: newCredits, last_check_in: today }).eq('id', currentUser.id);
-                    if (error) { showModal('오류', `<p>출석 체크 실패: ${error.message}</p>`); }
-                    else { showModal('출석 완료!', '<p>1 크레딧을 획득했습니다!</p>'); }
-                };
+                    };
+                    document.getElementById('auto-battle-toggle').onchange = async (e) => {
+                        const enabled = e.target.checked;
+                        const { error } = await supabaseClient.from('battle_profiles').update({ auto_battle_enabled: enabled }).eq('id', currentUser.id);
+                        if (error) { 
+                            showModal('오류', `<p>설정 저장 실패: ${error.message}</p><p>데이터베이스 RLS 정책이 올바르게 설정되었는지 확인해주세요.</p>`);
+                            e.target.checked = !enabled; // Revert checkbox on error
+                        } else {
+                            currentProfile.auto_battle_enabled = enabled;
+                        }
+                    };
+                    document.getElementById('change-email-form').onsubmit = async (e) => {
+                        e.preventDefault();
+                        const newEmail = document.getElementById('new-email-input').value;
+                        const { error } = await supabaseClient.auth.updateUser(
+                            { email: newEmail },
+                            { emailRedirectTo: 'https://07150906.vercel.app' }
+                        );
+                        if (error) {
+                            showModal('이메일 변경 오류', `<p>${error.message}</p>`);
+                        } else {
+                            showModal('확인메일 발송', `<p><strong>${newEmail}</strong>(으)로 이메일 변경 확인 메일을 보냈습니다. 이메일을 확인해주세요.</p>`);
+                        }
+                    };
+                    document.getElementById('check-in-btn').onclick = async () => {
+                        const today = new Date().toISOString().split('T')[0];
+                        if (currentProfile.last_check_in === today) {
+                            showModal('출석 체크', '<p>오늘은 이미 출석했습니다.</p>'); return;
+                        }
+                        if(currentProfile.credits >= 5) {
+                            showModal('크레딧 최대', '<p>무료 크레딧은 최대 5개까지 보유할 수 있습니다.</p>'); return;
+                        }
+                        const newCredits = currentProfile.credits + 1;
+                        const { error } = await supabaseClient.from('battle_profiles').update({ credits: newCredits, last_check_in: today }).eq('id', currentUser.id);
+                        if (error) { showModal('오류', `<p>출석 체크 실패: ${error.message}</p>`); }
+                        else { showModal('출석 완료!', '<p>1 크레딧을 획득했습니다!</p>'); }
+                    };
+                }
+            } catch (err) {
+                console.error("Error rendering profile view:", err);
+                profileViewContainer.innerHTML = `<p class="text-center p-8 text-red-400">프로필을 불러오는 데 실패했습니다: ${err.message}</p>`;
             }
         };
         
@@ -1822,53 +1911,54 @@ ${abilityListForPrompt}
             if (!currentProfile?.is_admin) { navigateTo('pokedex-view'); return; }
 
             adminViewContainer.innerHTML = `<div class="text-center p-8"><h2 class="text-2xl font-bold">사용자 목록 로딩 중...</h2></div>`;
+            try {
+                const { data: profiles, error } = await supabaseClient.from('battle_profiles').select('*');
+                if (error) { throw error; }
 
-            const { data: profiles, error } = await supabaseClient.from('battle_profiles').select('*');
-            if (error) {
-                adminViewContainer.innerHTML = `<p class="text-center text-red-400">사용자 정보를 불러오는 데 실패했습니다.</p>`;
-                return;
-            }
-
-            adminViewContainer.innerHTML = `
-                <div class="max-w-4xl mx-auto p-4">
-                    <h2 class="font-title text-4xl text-center mb-8">관리자 페이지</h2>
-                    <div class="bg-gray-800 rounded-lg shadow-lg p-6">
-                        <h3 class="font-bold text-xl mb-4">사용자 크레딧 관리</h3>
-                        <div id="admin-user-list" class="divide-y divide-gray-700">
-                            ${profiles.map(p => `
-                                <div class="py-3 flex justify-between items-center flex-wrap gap-2">
-                                    <div>
-                                        <p class="font-semibold">${p.nickname || '미설정'}</p>
-                                        <p class="text-sm text-gray-400">${p.email}</p>
+                adminViewContainer.innerHTML = `
+                    <div class="max-w-4xl mx-auto p-4">
+                        <h2 class="font-title text-4xl text-center mb-8">관리자 페이지</h2>
+                        <div class="bg-gray-800 rounded-lg shadow-lg p-6">
+                            <h3 class="font-bold text-xl mb-4">사용자 크레딧 관리</h3>
+                            <div id="admin-user-list" class="divide-y divide-gray-700">
+                                ${profiles.map(p => `
+                                    <div class="py-3 flex justify-between items-center flex-wrap gap-2">
+                                        <div>
+                                            <p class="font-semibold">${p.nickname || '미설정'}</p>
+                                            <p class="text-sm text-gray-400">${p.email}</p>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <span class="w-20 text-right">크레딧: ${p.credits}</span>
+                                            <input type="number" id="credit-input-${p.id}" class="w-24 p-1 border rounded bg-gray-700 border-gray-600 text-center" value="${p.credits}">
+                                            <button data-id="${p.id}" class="save-credit-btn bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">저장</button>
+                                        </div>
                                     </div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="w-20 text-right">크레딧: ${p.credits}</span>
-                                        <input type="number" id="credit-input-${p.id}" class="w-24 p-1 border rounded bg-gray-700 border-gray-600 text-center" value="${p.credits}">
-                                        <button data-id="${p.id}" class="save-credit-btn bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">저장</button>
-                                    </div>
-                                </div>
-                            `).join('')}
+                                `).join('')}
+                            </div>
                         </div>
                     </div>
-                </div>
-            `;
+                `;
 
-            document.querySelectorAll('.save-credit-btn').forEach(btn => {
-                btn.onclick = async () => {
-                    const userId = btn.dataset.id;
-                    const newCredits = document.getElementById(`credit-input-${userId}`).value;
-                    if (newCredits === '' || isNaN(newCredits)) {
-                        showModal('오류', `<p>유효한 숫자를 입력해주세요.</p>`);
-                        return;
-                    }
-                    const { error } = await supabaseClient.from('battle_profiles').update({ credits: parseInt(newCredits) }).eq('id', userId);
-                    if (error) { 
-                        showModal('오류', `<p>크레딧 수정 실패: ${error.message}</p>`);
-                    } else { 
-                        showModal('성공', '<p>크레딧이 성공적으로 수정되었습니다.</p>'); 
-                    }
-                };
-            });
+                document.querySelectorAll('.save-credit-btn').forEach(btn => {
+                    btn.onclick = async () => {
+                        const userId = btn.dataset.id;
+                        const newCredits = document.getElementById(`credit-input-${userId}`).value;
+                        if (newCredits === '' || isNaN(newCredits)) {
+                            showModal('오류', `<p>유효한 숫자를 입력해주세요.</p>`);
+                            return;
+                        }
+                        const { error } = await supabaseClient.from('battle_profiles').update({ credits: parseInt(newCredits) }).eq('id', userId);
+                        if (error) { 
+                            showModal('오류', `<p>크레딧 수정 실패: ${error.message}</p>`);
+                        } else { 
+                            showModal('성공', '<p>크레딧이 성공적으로 수정되었습니다.</p>'); 
+                        }
+                    };
+                });
+            } catch(err) {
+                 console.error("Error rendering admin view:", err);
+                adminViewContainer.innerHTML = `<p class="text-center text-red-400">관리자 페이지를 불러오는 데 실패했습니다: ${err.message}</p>`;
+            }
         };
         
         window.renderRankingPodium = async function() {
@@ -1897,91 +1987,112 @@ ${abilityListForPrompt}
                 rankingPodiumView.innerHTML = `<p class="text-center text-gray-500 col-span-full">아직 랭킹 데이터가 없습니다.</p>`;
             }
         };
+        
+        // =================================================================================
+        // --- 9. 앱 시작 및 이벤트 리스너 설정 (App Start & Event Listeners) ---
+        // =================================================================================
 
-        // --- Event Listeners & Initial Load ---
         function initApp() {
             document.addEventListener('DOMContentLoaded', async () => {
+                // Attach non-dynamic event listeners once DOM is ready
+                homeBtn.addEventListener('click', () => navigateTo('pokedex-view'));
+                generateBtn.addEventListener('click', generateCharacter);
+                promptInput.addEventListener('keydown', e => e.key === 'Enter' && generateCharacter());
+                goToBattleBtn.addEventListener('click', () => navigateTo('battle-selection-view'));
+                goToRankingBtn.addEventListener('click', () => navigateTo('ranking-view'));
+                showTypeChartBtn.addEventListener('click', showTypeChartModal);
+                showRarityTableBtn.addEventListener('click', showRarityModal);
+                loginForm.addEventListener('submit', handleLogin);
+                signupForm.addEventListener('submit', handleSignup);
+                
+                // Use event delegation for dynamically created nav buttons
+                navLinks.addEventListener('click', (e) => {
+                    const target = e.target.closest('button');
+                    if (!target) return;
+                    playUiClickSound();
+                    if (target.id === 'profile-btn') {
+                        if (currentUser) navigateTo('profile-view', currentUser.id);
+                    } else if (target.id === 'admin-btn') {
+                        if (currentProfile?.is_admin) navigateTo('admin-view');
+                    } else if (target.id === 'logout-btn') {
+                        handleLogout();
+                    } else if (target.id === 'login-signup-btn') {
+                        navigateTo('auth-view');
+                    }
+                });
+
+                document.getElementById('forgot-password-link').addEventListener('click', (e) => {
+                    e.preventDefault();
+                    showModal('비밀번호 재설정', `
+                        <p>가입하신 이메일 주소를 입력하시면, 비밀번호를 재설정할 수 있는 링크를 보내드립니다.</p>
+                        <form id="reset-password-form" class="mt-4 flex gap-2">
+                            <input type="email" id="reset-email-input" class="flex-1 p-2 border rounded-lg bg-gray-700 text-white border-gray-600" placeholder="이메일" required>
+                            <button type="submit" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">전송</button>
+                        </form>
+                    `);
+                    document.getElementById('reset-password-form').onsubmit = async (ev) => {
+                        ev.preventDefault();
+                        const email = document.getElementById('reset-email-input').value;
+                        const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+                            redirectTo: 'https://07150906.vercel.app'
+                        });
+                        if (error) {
+                            showModal('오류', `<p>비밀번호 재설정 메일 전송에 실패했습니다: ${error.message}</p>`);
+                        } else {
+                            showModal('메일 전송 완료', `<p><strong>${email}</strong>(으)로 비밀번호 재설정 메일을 보냈습니다. 이메일을 확인해주세요.</p>`);
+                        }
+                    };
+                });
+                
+                // Use event delegation for dynamically created list items
+                document.body.addEventListener('click', (e) => {
+                    const card = e.target.closest('.pokedex-card, .podium-item');
+                    if (card) {
+                        const profileLink = e.target.closest('[data-profile-id]');
+                        if (profileLink) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            navigateTo('profile-view', profileLink.dataset.profileId);
+                        } else if (card.dataset.charId) {
+                            navigateTo('detail-view', card.dataset.charId);
+                        }
+                    }
+                    if (e.target.id === 'load-more-btn') {
+                        loadMoreCharacters();
+                    }
+                });
+
+                tabBtns.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        playUiClickSound();
+                        const tab = btn.dataset.tab;
+                        document.querySelectorAll('.auth-form').forEach(form => form.classList.add('hidden'));
+                        document.getElementById(`${tab}-form`).classList.remove('hidden');
+                        tabBtns.forEach(b => b.classList.remove('border-[#8abeb7]', 'text-[#8abeb7]'));
+                        btn.classList.add('border-[#8abeb7]', 'text-[#8abeb7]');
+                    });
+                });
+                if(tabBtns.length > 0) tabBtns[0].click();
+                
+                filterBtns.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        playUiClickSound();
+                        filterBtns.forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        activeFilter = btn.dataset.filter;
+                        allCharacters = [];
+                        currentPage = 0;
+                        loadMoreCharacters();
+                    });
+                });
+
+                // Initialize auth state and load all data
                 const { data: { session } } = await supabaseClient.auth.getSession();
                 currentUser = session?.user || null;
                 await initialDataLoad();
                 listenToAuthStateChanges();
                 subscribeToChanges();
                 document.body.addEventListener('click', setupAudio, { once: true });
-            });
-
-            homeBtn.addEventListener('click', () => navigateTo('pokedex-view'));
-            generateBtn.addEventListener('click', generateCharacter);
-            promptInput.addEventListener('keydown', e => e.key === 'Enter' && generateCharacter());
-            goToBattleBtn.addEventListener('click', () => navigateTo('battle-selection-view'));
-            goToRankingBtn.addEventListener('click', () => navigateTo('ranking-view'));
-            showTypeChartBtn.addEventListener('click', showTypeChartModal);
-            showRarityTableBtn.addEventListener('click', showRarityModal);
-            loginForm.addEventListener('submit', handleLogin);
-            signupForm.addEventListener('submit', handleSignup);
-            
-            document.getElementById('forgot-password-link').addEventListener('click', (e) => {
-                e.preventDefault();
-                showModal('비밀번호 재설정', `
-                    <p>가입하신 이메일 주소를 입력하시면, 비밀번호를 재설정할 수 있는 링크를 보내드립니다.</p>
-                    <form id="reset-password-form" class="mt-4 flex gap-2">
-                        <input type="email" id="reset-email-input" class="flex-1 p-2 border rounded-lg bg-gray-700 text-white border-gray-600" placeholder="이메일" required>
-                        <button type="submit" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">전송</button>
-                    </form>
-                `);
-                document.getElementById('reset-password-form').onsubmit = async (ev) => {
-                    ev.preventDefault();
-                    const email = document.getElementById('reset-email-input').value;
-                    const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-                        redirectTo: 'https://07150906.vercel.app'
-                    });
-                    if (error) {
-                        showModal('오류', `<p>비밀번호 재설정 메일 전송에 실패했습니다: ${error.message}</p>`);
-                    } else {
-                        showModal('메일 전송 완료', `<p><strong>${email}</strong>(으)로 비밀번호 재설정 메일을 보냈습니다. 이메일을 확인해주세요.</p>`);
-                    }
-                };
-            });
-            
-            // --- Event Delegation for all dynamic lists ---
-            document.body.addEventListener('click', (e) => {
-                const card = e.target.closest('.pokedex-card, .podium-item');
-                if (card) {
-                    const profileLink = e.target.closest('[data-profile-id]');
-                    if (profileLink) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        navigateTo('profile-view', profileLink.dataset.profileId);
-                    } else if (card.dataset.charId) {
-                        navigateTo('detail-view', card.dataset.charId);
-                    }
-                }
-                if (e.target.id === 'load-more-btn') {
-                    loadMoreCharacters();
-                }
-            });
-
-            tabBtns.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    playUiClickSound();
-                    const tab = btn.dataset.tab;
-                    document.querySelectorAll('.auth-form').forEach(form => form.classList.add('hidden'));
-                    document.getElementById(`${tab}-form`).classList.remove('hidden');
-                    tabBtns.forEach(b => b.classList.remove('border-[#8abeb7]', 'text-[#8abeb7]'));
-                    btn.classList.add('border-[#8abeb7]', 'text-[#8abeb7]');
-                });
-            });
-            if(tabBtns.length > 0) tabBtns[0].click();
-            
-            filterBtns.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    playUiClickSound();
-                    filterBtns.forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    activeFilter = btn.dataset.filter;
-                    allCharacters = [];
-                    currentPage = 0;
-                    loadMoreCharacters();
-                });
             });
         }
         
